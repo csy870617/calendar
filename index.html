@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>쳐치 캘린더</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <div id="auth-view">
+            <h2 id="form-title">⛪ 쳐치 캘린더</h2>
+            <p class="subtitle" id="form-subtitle">우리교회 일정 함께 만들기</p>
+            
+            <div class="input-group">
+                <input type="text" id="church-name" placeholder="교회 이름">
+                <input type="password" id="church-pw" placeholder="그룹 비밀번호">
+            </div>
+
+            <div class="checkbox-group">
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="remember-check">
+                    <span class="checkmark"></span> 저장
+                </label>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="auto-login-check">
+                    <span class="checkmark"></span> 자동 로그인
+                </label>
+            </div>
+            
+            <p id="error-msg" class="error-msg"></p>
+
+            <button onclick="handleAuthAction()" id="action-btn">입장하기</button>
+            
+            <div class="toggle-link">
+                <a href="#" onclick="toggleMode()" id="toggle-btn">새 그룹 만들기</a>
+            </div>
+        </div>
+
+        <div id="calendar-view">
+            <div class="header">
+                <div class="header-left">
+                    <h1 class="church-title" id="display-church-name">교회명</h1>
+                    <span class="liturgical-info" id="liturgical-season">절기</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <span id="current-month-year"></span>
+                <div class="nav-group">
+                    <button onclick="changeMonth(-1)" class="nav-btn">❮</button>
+                    <button onclick="changeMonth(0)" class="nav-btn" style="width:auto; padding:0 10px;">오늘</button>
+                    <button onclick="changeMonth(1)" class="nav-btn">❯</button>
+                </div>
+            </div>
+
+            <div id="move-guide" class="move-guide" style="display:none;">
+                이동할 날짜를 선택하세요 (취소하려면 배경 클릭)
+            </div>
+
+            <div class="calendar-grid" id="calendar-grid">
+                <div class="day-name sun">일</div>
+                <div class="day-name">월</div>
+                <div class="day-name">화</div>
+                <div class="day-name">수</div>
+                <div class="day-name">목</div>
+                <div class="day-name">금</div>
+                <div class="day-name">토</div>
+                </div>
+            
+            <div class="footer-bar">
+                <button onclick="logout()" class="btn-outline">나가기</button>
+                <button onclick="shareMonth()">일정 공유</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="event-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>일정 관리</h3>
+            <div class="modal-body">
+                <input type="text" id="input-title" placeholder="일정 제목" class="full-width">
+
+                <div class="date-range-group">
+                    <div class="row">
+                        <label>시작</label>
+                        <input type="date" id="start-date">
+                        <input type="time" id="start-time">
+                    </div>
+                    <div class="row">
+                        <label>종료</label>
+                        <input type="date" id="end-date">
+                        <input type="time" id="end-time">
+                    </div>
+                </div>
+
+                <label class="custom-checkbox" style="margin-top:5px;">
+                    <input type="checkbox" id="all-day-check" onchange="toggleTimeInputs()">
+                    <span class="checkmark"></span> 하루 종일 (All Day)
+                </label>
+
+                <label style="margin-top:10px;">일정 색상</label>
+                <div class="color-palette" id="color-palette">
+                    <div class="color-option selected" data-color="#4285F4" style="background:#4285F4;"></div>
+                    <div class="color-option" data-color="#EA4335" style="background:#EA4335;"></div>
+                    <div class="color-option" data-color="#34A853" style="background:#34A853;"></div>
+                    <div class="color-option" data-color="#FBBC05" style="background:#FBBC05;"></div>
+                    <div class="color-option" data-color="#8E24AA" style="background:#8E24AA;"></div>
+                    <div class="color-option" data-color="#616161" style="background:#616161;"></div>
+                </div>
+                <input type="hidden" id="selected-color" value="#4285F4">
+
+                <textarea id="input-desc" rows="3" placeholder="메모 추가"></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button onclick="deleteSchedule()" class="btn-delete">삭제</button>
+                <div class="right-btns">
+                    <button onclick="closeModal()" class="btn-cancel">취소</button>
+                    <button onclick="saveSchedule()" class="btn-save">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script type="module" src="script.js"></script> 
+</body>
+</html>
