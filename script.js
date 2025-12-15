@@ -766,7 +766,7 @@ function showExpandedBadge(element, text, bgColor, textColor) {
     }, 0);
 }
 
-// [MODIFIED] 공유 기능 (스마트폰 Share API 우선)
+// [MODIFIED] 공유하기 (제목 중복 방지: title 속성 제거)
 async function shareMonth() {
     const events = eventsCache;
     const churchName = churchInfo.name || "우리교회";
@@ -807,18 +807,15 @@ async function shareMonth() {
     
     shareText += "\n\nFAITHS 크리스천 성장 도구 플랫폼\nhttps://csy870617.github.io/faiths/";
 
-    // [중요] Web Share API (모바일 공유) 우선 시도
     if (navigator.share) {
         try {
             await navigator.share({
-                title: `${churchName} ${currentMonth + 1}월 일정`,
+                // title 제거: 본문에 이미 제목이 있으므로 중복 방지
                 text: shareText
             });
         } catch (err) {
-            // 사용자가 취소한 경우 외에는 클립보드 복사 시도
-            if (err.name !== 'AbortError') {
-                copyToClipboard(shareText);
-            }
+            // 사용자가 취소한 경우 외에는 복사
+            if (err.name !== 'AbortError') copyToClipboard(shareText);
         }
     } else {
         copyToClipboard(shareText);
