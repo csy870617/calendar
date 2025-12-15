@@ -180,7 +180,7 @@ function calculateYearlyData(year) {
 }
 
 // ==========================================
-// [3] 인증 로직 (수정됨: 이름 중복 허용, PW로 구분)
+// [3] 인증 로직
 // ==========================================
 async function handleAuthAction() {
     const name = document.getElementById('church-name').value.trim();
@@ -192,7 +192,6 @@ async function handleAuthAction() {
     if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
 
     const churchesRef = collection(db, "churches");
-    // 이름과 비밀번호가 모두 일치하는지 확인하는 쿼리
     const q = query(churchesRef, where("name", "==", name), where("password", "==", pw));
 
     try {
@@ -201,11 +200,8 @@ async function handleAuthAction() {
         if (isRegisterMode) {
             // [그룹 생성]
             if (!querySnapshot.empty) {
-                // 이름과 비번이 완벽히 똑같은 그룹이 이미 있으면 중복으로 간주
-                // [요청 사항 반영] 문구 수정
                 errorMsg.innerText = "비밀번호 수정해도 입장 가능";
             } else {
-                // 이름은 같아도 비번이 다르면 새 문서 생성 (addDoc으로 자동 ID 부여)
                 const newDocRef = await addDoc(churchesRef, {
                     name: name,
                     password: pw,
@@ -217,16 +213,13 @@ async function handleAuthAction() {
         } else {
             // [입장하기]
             if (!querySnapshot.empty) {
-                // 일치하는 그룹 찾음 (첫 번째 문서로 입장)
                 const docSnap = querySnapshot.docs[0];
-                
                 if (rememberCheck && rememberCheck.checked) {
                     const authData = { name, pw, autoLogin: autoLoginCheck.checked };
                     localStorage.setItem('churchAuthData', JSON.stringify(authData));
                 } else {
                     localStorage.removeItem('churchAuthData');
                 }
-                // 문서 ID와 이름을 전달
                 enterService(docSnap.id, name);
             } else {
                 errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
@@ -243,7 +236,6 @@ async function handleAuthAction() {
     }
 }
 
-// 입장 처리: 이제 docId를 받아서 해당 문서를 구독함
 function enterService(docId, name) {
     churchInfo = { id: docId, name: name };
     isAdmin = true; 
@@ -251,7 +243,6 @@ function enterService(docId, name) {
     document.getElementById('calendar-view').style.display = 'flex';
     document.getElementById('display-church-name').innerText = name;
     
-    // 문서 ID로 구독 (이름 아님)
     onSnapshot(doc(db, "churches", docId), (doc) => {
         if (doc.exists()) {
             const data = doc.data();
@@ -390,7 +381,7 @@ function closeModal() {
 }
 
 // ==========================================
-// [4] Firestore 저장/삭제/이동 로직 (ID 기반)
+// Firestore 저장/삭제/이동 로직
 // ==========================================
 
 async function saveSchedule() {
@@ -775,7 +766,8 @@ function showExpandedBadge(element, text, bgColor, textColor) {
     }, 0);
 }
 
-function shareMonth() {
+// [MODIFIED] 공유 기능 (스마트폰 Share API 우선)
+async function shareMonth() {
     const events = eventsCache;
     const churchName = churchInfo.name || "우리교회";
     
@@ -815,13 +807,19 @@ function shareMonth() {
     
     shareText += "\n\nFAITHS 크리스천 성장 도구 플랫폼\nhttps://csy870617.github.io/faiths/";
 
+    // [중요] Web Share API (모바일 공유) 우선 시도
     if (navigator.share) {
-        navigator.share({
-            title: `${churchName} ${currentMonth + 1}월 일정`,
-            text: shareText
-        }).catch(err => {
-            copyToClipboard(shareText);
-        });
+        try {
+            await navigator.share({
+                title: `${churchName} ${currentMonth + 1}월 일정`,
+                text: shareText
+            });
+        } catch (err) {
+            // 사용자가 취소한 경우 외에는 클립보드 복사 시도
+            if (err.name !== 'AbortError') {
+                copyToClipboard(shareText);
+            }
+        }
     } else {
         copyToClipboard(shareText);
     }
@@ -853,7 +851,7 @@ function initGestures() {
     }, {passive:true});
 }
 
-// [중요] HTML 연결 - 모듈 함수를 전역(Window)으로 노출
+// [중요] HTML 연결
 window.handleAuthAction = handleAuthAction;
 window.toggleMode = toggleMode;
 window.changeMonth = changeMonth;
