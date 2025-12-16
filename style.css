@@ -61,26 +61,56 @@ input:focus { outline: none; border-color: var(--primary); border-width: 2px; ma
     border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 
+/* [수정] 버튼 스타일: 파란색 테두리/박스 강제 제거 */
 .btn-text {
-    background: none; border: none; padding: 0; width: auto;
-    color: var(--text-sub); font-size: 0.85rem; font-weight: normal;
-    text-decoration: underline; cursor: pointer;
-    margin-top: 2px;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important; /* 파란 테두리 제거 핵심 */
+    box-shadow: none !important; /* 그림자 제거 */
+    padding: 5px 0;
+    width: auto;
+    color: var(--text-sub); 
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent !important; /* 모바일 터치 박스 제거 */
 }
-.btn-text:hover { color: var(--primary); }
 
-/* [NEW] 버튼 가로 배치 컨테이너 */
+/* 포커스(클릭) 되어도 테두리 안 생기게 설정 */
+.btn-text:focus, .btn-text:focus-visible {
+    outline: none !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.btn-text:hover {
+    color: var(--text-sub); 
+    text-decoration: underline;
+}
+
+.btn-text:active {
+    color: var(--text-main);
+    transform: scale(0.96);
+    opacity: 0.8;
+    background: transparent !important; /* 눌러도 배경 투명 유지 */
+}
+
 .btn-row {
     width: 100%; display: flex; gap: 10px;
 }
-/* 버튼들이 균등한 너비를 가지도록 설정 */
 .btn-row button { flex: 1; }
 
 button {
     width: 100%; padding: 14px; background: var(--primary); color: white;
     border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
 }
+button:active { transform: scale(0.98); }
 button:hover { background-color: #3367d6; }
+
 .toggle-link { margin-top: 20px; font-size: 0.9rem; }
 .toggle-link a { color: var(--primary); text-decoration: none; font-weight: bold; }
 .error-msg { color: var(--holiday); font-size: 0.9rem; margin-top: 10px; min-height: 20px; text-align: center; }
@@ -107,8 +137,8 @@ button:hover { background-color: #3367d6; }
     padding: 10px 20px; background: #fff; flex-shrink: 0;
 }
 .nav-group { display: flex; align-items: center; gap: 10px; }
-.nav-btn { width: 32px; height: 32px; background: transparent; color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 0; display: flex; justify-content: center; align-items: center; font-size: 1rem; }
-.nav-btn:hover { background: #f1f3f4; }
+.nav-btn { width: 32px; height: 32px; background: transparent; color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 0; display: flex; justify-content: center; align-items: center; font-size: 1rem; cursor: pointer; }
+.nav-btn:active { background: #f1f3f4; transform: scale(0.9); } 
 #current-month-year { font-size: 1.25rem; font-weight: 500; }
 
 .move-guide {
@@ -141,7 +171,7 @@ button:hover { background-color: #3367d6; }
     overflow: hidden;
 }
 .day:nth-child(7n) { border-right: none; }
-.day:hover { background-color: #f8f9fa; }
+.day:active { background-color: #f1f3f4; }
 .day.drag-over { background-color: #e8f0fe; border: 2px dashed var(--primary); }
 .day.target-mode { background-color: #f1f8e9; }
 
@@ -160,7 +190,7 @@ button:hover { background-color: #3367d6; }
     text-align: left; font-weight: 500; cursor: pointer;
     color: white; user-select: none;
 }
-.badge:hover { opacity: 0.8; }
+.badge:active { opacity: 0.6; transform: scale(0.98); }
 .badge.dragging { opacity: 0.5; }
 .badge.moving-selected { border: 2px solid #333; opacity: 0.7; transform: scale(0.95); }
 

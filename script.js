@@ -111,6 +111,15 @@ function getEasterDate(year) {
     return { month, day };
 }
 
+function getNextDayOfWeek(date, dayOfWeek) {
+    const resultDate = new Date(date.getTime());
+    resultDate.setDate(date.getDate() + (7 + dayOfWeek - date.getDay()) % 7);
+    if (resultDate.getTime() === date.getTime()) {
+        resultDate.setDate(date.getDate() + 7);
+    }
+    return resultDate;
+}
+
 function calculateYearlyData(year) {
     if (cachedYear === year) return;
     const holidays = {}; 
@@ -120,11 +129,23 @@ function calculateYearlyData(year) {
         holidays[key].push({ name, type, color, isHoliday });
     };
 
+    // 색상 정의 [수정됨]
+    const COL_PURPLE = "#7B1FA2"; // 보라
+    const COL_GOLD   = "#D4AF37"; // [변경] 메탈릭 골드 (주황기 제거)
+    const COL_RED    = "#D32F2F"; // 빨강
+    const COL_GREEN  = "#2E7D32"; // 초록
+
+    // 1. 양력 공휴일
     for (const [key, name] of Object.entries(solarHolidays)) {
         const [m, d] = key.split('-').map(Number);
-        addDate(m, d, name, 'holiday', null, true);
+        if (key === "12-25") {
+            addDate(m, d, name, 'lit', COL_GOLD, true); 
+        } else {
+            addDate(m, d, name, 'holiday', null, true);
+        }
     }
 
+    // 2. 음력 공휴일
     const formatter = new Intl.DateTimeFormat('ko-KR', { calendar: 'chinese', day: 'numeric', month: 'numeric' });
     const checkLunar = (start, days, tm, td, name) => {
         const date = new Date(start); 
@@ -157,23 +178,77 @@ function calculateYearlyData(year) {
         addDate(n.getMonth()+1, n.getDate(), "추석연휴", 'holiday', null, true);
     }
 
+    // 3. 교회력 절기
+    addDate(1, 6, "주현절", 'lit', COL_GOLD, false);
+    
+    const epiphany = new Date(year, 0, 6);
+    const baptism = getNextDayOfWeek(epiphany, 0); 
+    addDate(baptism.getMonth()+1, baptism.getDate(), "주님 세례 주일", 'lit', COL_GOLD, false);
+
     const easter = getEasterDate(year);
     const easterDate = new Date(year, easter.month-1, easter.day);
-    addDate(easter.month, easter.day, "부활절", 'lit', "#333", false);
-    
-    const pentecost = new Date(easterDate); pentecost.setDate(pentecost.getDate()+49);
-    addDate(pentecost.getMonth()+1, pentecost.getDate(), "성령강림절", 'lit', "var(--lit-text)", false);
+    addDate(easter.month, easter.day, "부활절", 'lit', COL_GOLD, false);
 
-    const ashWed = new Date(easterDate); ashWed.setDate(ashWed.getDate()-46);
-    addDate(ashWed.getMonth()+1, ashWed.getDate(), "재의 수요일(사순절 시작)", 'lit', "var(--lit-text)", false);
+    const ashWed = new Date(easterDate); 
+    ashWed.setDate(ashWed.getDate() - 46);
+    addDate(ashWed.getMonth()+1, ashWed.getDate(), "재의 수요일(사순절 시작)", 'lit', COL_PURPLE, false);
+
+    const transfiguration = new Date(ashWed);
+    transfiguration.setDate(transfiguration.getDate() - 3);
+    addDate(transfiguration.getMonth()+1, transfiguration.getDate(), "산상변모 주일", 'lit', COL_GOLD, false);
+
+    const palmSunday = new Date(easterDate);
+    palmSunday.setDate(palmSunday.getDate() - 7);
+    addDate(palmSunday.getMonth()+1, palmSunday.getDate(), "종려주일(고난주간)", 'lit', COL_RED, false);
+
+    const goodFriday = new Date(easterDate);
+    goodFriday.setDate(goodFriday.getDate() - 2);
+    addDate(goodFriday.getMonth()+1, goodFriday.getDate(), "성금요일", 'lit', COL_RED, false);
+
+    const ascension = new Date(easterDate);
+    ascension.setDate(ascension.getDate() + 39);
+    addDate(ascension.getMonth()+1, ascension.getDate(), "주님 승천일", 'lit', COL_GOLD, false);
+
+    const pentecost = new Date(easterDate); 
+    pentecost.setDate(pentecost.getDate() + 49);
+    addDate(pentecost.getMonth()+1, pentecost.getDate(), "성령강림절", 'lit', COL_RED, false);
+
+    const trinity = new Date(pentecost);
+    trinity.setDate(trinity.getDate() + 7);
+    addDate(trinity.getMonth()+1, trinity.getDate(), "삼위일체 주일", 'lit', COL_GOLD, false);
+
+    const sept1 = new Date(year, 8, 1);
+    const creationStart = new Date(sept1);
+    if(sept1.getDay() !== 0) creationStart.setDate(sept1.getDate() + (7 - sept1.getDay()));
+    addDate(creationStart.getMonth()+1, creationStart.getDate(), "창조절 시작", 'lit', COL_GREEN, false);
+
+    const oct31 = new Date(year, 9, 31);
+    const reformation = new Date(oct31);
+    reformation.setDate(oct31.getDate() - oct31.getDay()); 
+    addDate(reformation.getMonth()+1, reformation.getDate(), "종교개혁주일", 'lit', COL_RED, false);
+
+    const nov1 = new Date(year, 10, 1);
+    const thanksgiving = new Date(nov1);
+    if(nov1.getDay() !== 0) thanksgiving.setDate(nov1.getDate() + (7 - nov1.getDay())); 
+    thanksgiving.setDate(thanksgiving.getDate() + 14); 
+    addDate(thanksgiving.getMonth()+1, thanksgiving.getDate(), "추수감사주일", 'lit', COL_GREEN, false);
 
     const nov27 = new Date(year, 10, 27);
     const dayOfNov27 = nov27.getDay(); 
     const offset = (7 - dayOfNov27) % 7;
     const advent1st = new Date(year, 10, 27 + offset);
-    addDate(advent1st.getMonth()+1, advent1st.getDate(), "대림절 제1주(교회력 시작)", 'lit', "var(--lit-text)", false);
+    addDate(advent1st.getMonth()+1, advent1st.getDate(), "대림절 제1주", 'lit', COL_PURPLE, false);
+    
+    const advent2nd = new Date(advent1st); advent2nd.setDate(advent1st.getDate()+7);
+    addDate(advent2nd.getMonth()+1, advent2nd.getDate(), "대림절 제2주", 'lit', COL_PURPLE, false);
+    const advent3rd = new Date(advent1st); advent3rd.setDate(advent1st.getDate()+14);
+    addDate(advent3rd.getMonth()+1, advent3rd.getDate(), "대림절 제3주", 'lit', COL_PURPLE, false);
+    const advent4th = new Date(advent1st); advent4th.setDate(advent1st.getDate()+21);
+    addDate(advent4th.getMonth()+1, advent4th.getDate(), "대림절 제4주", 'lit', COL_PURPLE, false);
 
-    addDate(1, 6, "주현절", 'lit', "#333", false);
+    const christKing = new Date(advent1st);
+    christKing.setDate(christKing.getDate() - 7);
+    addDate(christKing.getMonth()+1, christKing.getDate(), "왕이신 그리스도 주일", 'lit', COL_GOLD, false);
 
     cachedHolidays = holidays;
     cachedYear = year;
@@ -291,7 +366,6 @@ function toggleMode() {
     
     document.querySelector('.checkbox-group').style.display = isRegisterMode ? 'none' : 'flex';
     
-    // [NEW] 초대하기 버튼 숨김/표시 처리
     const inviteBtn = document.querySelector('.btn-row .btn-outline');
     if(inviteBtn) inviteBtn.style.display = isRegisterMode ? 'none' : 'block';
 
@@ -319,20 +393,17 @@ function logout() {
     location.reload();
 }
 
-// [NEW] 초대 기능
 function inviteUser() {
     const shareData = {
-        title: '[쳐치 캘린더]',
-        text: '우리교회 일정 함께 만들어요',
-        url: 'https://csy870617.github.io/faiths/'
+        text: '우리교회 일정 함께 만들어요\nhttps://csy870617.github.io/faiths/'
     };
 
     if (navigator.share) {
         navigator.share(shareData).catch((err) => {
-            if (err.name !== 'AbortError') copyToClipboard(shareData.url);
+            if (err.name !== 'AbortError') copyToClipboard(shareData.text);
         });
     } else {
-        copyToClipboard(`${shareData.text}\n${shareData.url}`);
+        copyToClipboard(shareData.text);
     }
 }
 
@@ -672,7 +743,13 @@ function renderCalendar() {
                 badge.innerText = info.name;
                 
                 let bg, txt;
-                if (info.isHoliday) {
+                
+                // [우선순위 수정] 색상이 명시된 경우(교회력)를 가장 먼저 처리
+                if (info.color) {
+                    bg = info.color;
+                    txt = "#fff";
+                    if (info.isHoliday) isRedDay = true; // 공휴일이면 날짜도 빨강
+                } else if (info.isHoliday) {
                     badge.classList.add('holiday-badge');
                     bg = "var(--holiday-bg)"; txt = "var(--holiday)";
                     isRedDay = true;
@@ -681,6 +758,9 @@ function renderCalendar() {
                     bg = "var(--lit-bg)"; txt = "var(--lit-text)";
                 }
                 
+                if(bg) badge.style.backgroundColor = bg;
+                if(txt) badge.style.color = txt;
+
                 badge.onclick = (e) => {
                     e.stopPropagation();
                     const computedStyle = getComputedStyle(badge);
