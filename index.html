@@ -19,19 +19,25 @@
             </div>
 
             <div class="checkbox-group">
-                <label class="custom-checkbox">
-                    <input type="checkbox" id="remember-check">
-                    <span class="checkmark"></span> 저장
-                </label>
-                <label class="custom-checkbox">
-                    <input type="checkbox" id="auto-login-check">
-                    <span class="checkmark"></span> 자동 로그인
-                </label>
+                <div class="check-left">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="remember-check">
+                        <span class="checkmark"></span> 저장
+                    </label>
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="auto-login-check">
+                        <span class="checkmark"></span> 자동 로그인
+                    </label>
+                </div>
+                <button onclick="handleGuestLogin()" class="btn-text">로그인 없이 보기</button>
             </div>
             
             <p id="error-msg" class="error-msg"></p>
 
-            <button onclick="handleAuthAction()" id="action-btn">입장하기</button>
+            <div class="btn-row">
+                <button onclick="inviteUser()" class="btn-outline">초대하기</button>
+                <button onclick="handleAuthAction()" id="action-btn">입장하기</button>
+            </div>
             
             <div class="toggle-link">
                 <a href="#" onclick="toggleMode()" id="toggle-btn">새 그룹 만들기</a>
@@ -67,7 +73,7 @@
                 <div class="day-name">목</div>
                 <div class="day-name">금</div>
                 <div class="day-name">토</div>
-                </div>
+            </div>
             
             <div class="footer-bar">
                 <button onclick="logout()" class="btn-outline">나가기</button>
@@ -124,6 +130,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js"></script> 
+    <script type="module" src="script.js"></script>
 </body>
 </html>

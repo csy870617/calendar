@@ -208,7 +208,7 @@ async function handleAuthAction() {
                     events: {}
                 });
                 alert("새로운 그룹이 생성되었습니다!");
-                enterService(newDocRef.id, name);
+                enterService(newDocRef.id, name, true);
             }
         } else {
             // [입장하기]
@@ -220,7 +220,7 @@ async function handleAuthAction() {
                 } else {
                     localStorage.removeItem('churchAuthData');
                 }
-                enterService(docSnap.id, name);
+                enterService(docSnap.id, name, true);
             } else {
                 errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
             }
@@ -236,9 +236,32 @@ async function handleAuthAction() {
     }
 }
 
-function enterService(docId, name) {
+async function handleGuestLogin() {
+    const name = document.getElementById('church-name').value.trim();
+    const errorMsg = document.getElementById('error-msg');
+
+    if (!name) { errorMsg.innerText = "교회 이름을 입력해주세요."; return; }
+
+    const churchesRef = collection(db, "churches");
+    const q = query(churchesRef, where("name", "==", name));
+
+    try {
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const docSnap = querySnapshot.docs[0];
+            enterService(docSnap.id, name, false);
+        } else {
+            errorMsg.innerText = "존재하지 않는 교회입니다.";
+        }
+    } catch (e) {
+        alert("오류 발생: " + e.message);
+    }
+}
+
+function enterService(docId, name, isManager) {
     churchInfo = { id: docId, name: name };
-    isAdmin = true; 
+    isAdmin = isManager; 
+    
     document.getElementById('auth-view').style.display = 'none';
     document.getElementById('calendar-view').style.display = 'flex';
     document.getElementById('display-church-name').innerText = name;
@@ -263,7 +286,15 @@ function toggleMode() {
     const toggleBtn = document.getElementById('toggle-btn');
     const errorMsg = document.getElementById('error-msg');
     
+    const guestBtn = document.querySelector('.btn-text');
+    if (guestBtn) guestBtn.style.display = isRegisterMode ? 'none' : 'block';
+    
     document.querySelector('.checkbox-group').style.display = isRegisterMode ? 'none' : 'flex';
+    
+    // [NEW] 초대하기 버튼 숨김/표시 처리
+    const inviteBtn = document.querySelector('.btn-row .btn-outline');
+    if(inviteBtn) inviteBtn.style.display = isRegisterMode ? 'none' : 'block';
+
     errorMsg.innerText = "";
 
     if (isRegisterMode) {
@@ -286,6 +317,23 @@ function logout() {
         localStorage.setItem('churchAuthData', JSON.stringify(savedAuth));
     }
     location.reload();
+}
+
+// [NEW] 초대 기능
+function inviteUser() {
+    const shareData = {
+        title: '[쳐치 캘린더]',
+        text: '우리교회 일정 함께 만들어요',
+        url: 'https://csy870617.github.io/faiths/'
+    };
+
+    if (navigator.share) {
+        navigator.share(shareData).catch((err) => {
+            if (err.name !== 'AbortError') copyToClipboard(shareData.url);
+        });
+    } else {
+        copyToClipboard(`${shareData.text}\n${shareData.url}`);
+    }
 }
 
 function setupColorPalette() {
@@ -330,6 +378,18 @@ function openModal(year, month, day) {
     const dateKey = `${year}-${month}-${day}`;
     const rawData = eventsCache[dateKey];
     
+    if (!isAdmin) {
+        if (rawData) {
+            let data = rawData.startsWith('{') ? JSON.parse(rawData) : { title: rawData, desc: '' };
+            let timeStr = "";
+            if(data.isAllDay) timeStr = "[종일]";
+            else if(data.startTime) timeStr = `${data.startTime} ~ ${data.endTime || ''}`;
+            
+            alert(`[일정 상세]\n\n제목: ${data.title}\n일시: ${data.startDate} ~ ${data.endDate}\n시간: ${timeStr}\n내용: ${data.desc}`);
+        }
+        return;
+    }
+
     const modal = document.getElementById('event-modal');
     modal.style.display = 'flex';
     
@@ -850,6 +910,8 @@ function initGestures() {
 
 // [중요] HTML 연결
 window.handleAuthAction = handleAuthAction;
+window.handleGuestLogin = handleGuestLogin;
+window.inviteUser = inviteUser;
 window.toggleMode = toggleMode;
 window.changeMonth = changeMonth;
 window.logout = logout;
