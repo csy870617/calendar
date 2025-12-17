@@ -53,7 +53,6 @@ window.onload = function() {
     setupDateListeners(); 
     initGestures();
     
-    // [중요] 뒤로가기 이벤트 감지 (모달 닫기용)
     window.addEventListener('popstate', () => {
         const modal = document.getElementById('event-modal');
         if (modal.style.display === 'flex') {
@@ -385,7 +384,8 @@ function toggleMode() {
         toggleBtn.innerText = "이미 그룹이 있으신가요? 입장하기";
     } else {
         title.innerText = "⛪ 쳐치 캘린더";
-        subtitle.innerText = "우리교회 일정 함께 만들기";
+        // [수정] 문구 변경 적용
+        subtitle.innerText = "교회력 확인 및 우리교회 일정 함께 만들기";
         btn.innerText = "입장하기";
         toggleBtn.innerText = "새 그룹 만들기";
     }
@@ -453,7 +453,6 @@ function toggleTimeInputs() {
 function openModal(year, month, day) {
     if(isMovingMode) return;
 
-    // [중요] 모달 열 때 히스토리 추가 (뒤로가기 시 모달 닫기 위해)
     history.pushState({ modal: 'open' }, null, '');
     
     const dateKey = `${year}-${month}-${day}`;
@@ -468,7 +467,6 @@ function openModal(year, month, day) {
             
             alert(`[일정 상세]\n\n제목: ${data.title}\n일시: ${data.startDate} ~ ${data.endDate}\n시간: ${timeStr}\n내용: ${data.desc}`);
         }
-        // 게스트 모드는 모달을 띄우지 않고 alert만 보여준 후 히스토리 되돌리기
         history.back(); 
         return;
     }
@@ -520,7 +518,6 @@ function openModal(year, month, day) {
 }
 
 function closeModal() {
-    // 직접 display = none 하지 않고 뒤로가기를 호출 -> popstate 이벤트가 닫음
     history.back();
 }
 
