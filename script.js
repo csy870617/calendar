@@ -52,6 +52,14 @@ window.onload = function() {
     setupColorPalette();
     setupDateListeners(); 
     initGestures();
+    
+    // [중요] 뒤로가기 이벤트 감지 (모달 닫기용)
+    window.addEventListener('popstate', () => {
+        const modal = document.getElementById('event-modal');
+        if (modal.style.display === 'flex') {
+            modal.style.display = 'none';
+        }
+    });
 };
 
 function checkAutoLogin() {
@@ -129,11 +137,10 @@ function calculateYearlyData(year) {
         holidays[key].push({ name, type, color, isHoliday });
     };
 
-    // 색상 정의 [수정됨]
-    const COL_PURPLE = "#7B1FA2"; // 보라
-    const COL_GOLD   = "#D4AF37"; // [변경] 메탈릭 골드 (주황기 제거)
-    const COL_RED    = "#D32F2F"; // 빨강
-    const COL_GREEN  = "#2E7D32"; // 초록
+    const COL_PURPLE = "#7B1FA2"; 
+    const COL_GOLD   = "#D4AF37"; 
+    const COL_RED    = "#D32F2F"; 
+    const COL_GREEN  = "#2E7D32"; 
 
     // 1. 양력 공휴일
     for (const [key, name] of Object.entries(solarHolidays)) {
@@ -446,6 +453,9 @@ function toggleTimeInputs() {
 function openModal(year, month, day) {
     if(isMovingMode) return;
 
+    // [중요] 모달 열 때 히스토리 추가 (뒤로가기 시 모달 닫기 위해)
+    history.pushState({ modal: 'open' }, null, '');
+    
     const dateKey = `${year}-${month}-${day}`;
     const rawData = eventsCache[dateKey];
     
@@ -458,6 +468,8 @@ function openModal(year, month, day) {
             
             alert(`[일정 상세]\n\n제목: ${data.title}\n일시: ${data.startDate} ~ ${data.endDate}\n시간: ${timeStr}\n내용: ${data.desc}`);
         }
+        // 게스트 모드는 모달을 띄우지 않고 alert만 보여준 후 히스토리 되돌리기
+        history.back(); 
         return;
     }
 
@@ -508,7 +520,8 @@ function openModal(year, month, day) {
 }
 
 function closeModal() {
-    document.getElementById('event-modal').style.display = 'none';
+    // 직접 display = none 하지 않고 뒤로가기를 호출 -> popstate 이벤트가 닫음
+    history.back();
 }
 
 // ==========================================
@@ -744,11 +757,10 @@ function renderCalendar() {
                 
                 let bg, txt;
                 
-                // [우선순위 수정] 색상이 명시된 경우(교회력)를 가장 먼저 처리
                 if (info.color) {
                     bg = info.color;
                     txt = "#fff";
-                    if (info.isHoliday) isRedDay = true; // 공휴일이면 날짜도 빨강
+                    if (info.isHoliday) isRedDay = true; 
                 } else if (info.isHoliday) {
                     badge.classList.add('holiday-badge');
                     bg = "var(--holiday-bg)"; txt = "var(--holiday)";
