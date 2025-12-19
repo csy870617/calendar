@@ -2,7 +2,7 @@ import { db, auth, signInAnonymously } from './firebase.js';
 import { collection, query, where, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { state } from './store.js';
 
-// 공통 로그인 처리 함수 (익명 로그인 후 DB 조회)
+// 공통 로그인 처리 함수
 async function authenticateAndQuery(callback) {
     try {
         if (!auth.currentUser) {
@@ -19,26 +19,23 @@ export async function handleAuthAction() {
     const name = document.getElementById('church-name').value.trim();
     const pw = document.getElementById('church-pw').value.trim();
     const errorMsg = document.getElementById('error-msg');
-    const rememberCheck = document.getElementById('remember-check');
+    
+    // [수정] '저장' 체크박스 제거됨. '자동 로그인' 체크박스만 사용.
     const autoLoginCheck = document.getElementById('auto-login-check');
 
     if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
 
     await authenticateAndQuery(async () => {
         const churchesRef = collection(db, "churches");
-        // 이름과 비밀번호가 모두 일치하는지 확인
         const q = query(churchesRef, where("name", "==", name), where("password", "==", pw));
 
         try {
             const querySnapshot = await getDocs(q);
 
             if (state.isRegisterMode) {
-                // [그룹 생성 모드]
                 if (!querySnapshot.empty) {
-                    // [수정됨] 이미 완벽히 동일한 계정이 있을 때 문구 변경 (두 줄 처리)
                     errorMsg.innerHTML = "이미 등록된 아이디입니다.<br>다른 이름이나 비밀번호를 사용해주세요.";
                 } else {
-                    // 이름+비번 조합이 없으면 생성
                     const newDocRef = await addDoc(churchesRef, {
                         name: name,
                         password: pw,
@@ -48,15 +45,17 @@ export async function handleAuthAction() {
                     window.enterService(newDocRef.id, name, true);
                 }
             } else {
-                // [입장하기 모드]
                 if (!querySnapshot.empty) {
                     const docSnap = querySnapshot.docs[0];
-                    if (rememberCheck && rememberCheck.checked) {
-                        const authData = { name, pw, autoLogin: autoLoginCheck.checked };
+                    
+                    // [수정] 자동 로그인 체크 시 로컬스토리지 저장
+                    if (autoLoginCheck && autoLoginCheck.checked) {
+                        const authData = { name, pw, autoLogin: true };
                         localStorage.setItem('churchAuthData', JSON.stringify(authData));
                     } else {
                         localStorage.removeItem('churchAuthData');
                     }
+                    
                     window.enterService(docSnap.id, name, true);
                 } else {
                     errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
@@ -96,22 +95,19 @@ export async function handleGuestLogin() {
 export function logout() {
     const savedAuth = JSON.parse(localStorage.getItem('churchAuthData'));
     if (savedAuth) {
-        savedAuth.autoLogin = false;
-        localStorage.setItem('churchAuthData', JSON.stringify(savedAuth));
+        // 로그아웃 시 자동 로그인 정보는 삭제하거나 false로 변경
+        localStorage.removeItem('churchAuthData'); 
     }
     location.reload();
 }
 
 export function checkAutoLogin() {
     const savedAuth = JSON.parse(localStorage.getItem('churchAuthData'));
-    if (savedAuth) {
+    if (savedAuth && savedAuth.autoLogin) {
         document.getElementById('church-name').value = savedAuth.name || "";
         document.getElementById('church-pw').value = savedAuth.pw || "";
-        document.getElementById('remember-check').checked = true;
-        if (savedAuth.autoLogin) {
-            document.getElementById('auto-login-check').checked = true;
-            handleAuthAction();
-        }
+        document.getElementById('auto-login-check').checked = true;
+        handleAuthAction();
     }
 }
 

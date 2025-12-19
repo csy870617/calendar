@@ -13,47 +13,67 @@
     --event-text: #1967d2;
 }
 
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
 body {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
     margin: 0; padding: 0;
     background-color: var(--bg-body);
     color: var(--text-main);
-    height: 100vh; height: 100dvh; 
+    height: 100vh; 
+    height: 100dvh; 
     overflow: hidden;
     display: flex; justify-content: center;
 }
 
 .container {
-    width: 100%; max-width: 1200px; height: 100%;
-    display: flex; flex-direction: column; background: #fff; position: relative;
+    width: 100%; height: 100%;
+    max-width: 1200px;
+    display: flex; flex-direction: column; 
+    background: #fff; position: relative;
+    box-shadow: 0 0 20px rgba(0,0,0,0.05);
 }
 
+/* --- 1. 로그인/등록 화면 --- */
 #auth-view {
     flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
-    padding: 20px; max-width: 400px; margin: 0 auto; width: 100%;
+    padding: 30px; width: 100%; max-width: 420px; margin: 0 auto;
 }
 
-h2#form-title { font-size: 1.8rem; margin-bottom: 10px; color: var(--text-main); }
-.subtitle { color: var(--text-sub); margin-bottom: 40px; }
+h2#form-title { font-size: 1.8rem; margin-bottom: 8px; color: var(--text-main); text-align: center; }
+.subtitle { color: var(--text-sub); margin-bottom: 30px; text-align: center; word-break: keep-all; line-height: 1.4; }
 
-.input-group { width: 100%; margin-bottom: 20px; }
+.input-group { width: 100%; margin-bottom: 15px; }
 input {
     width: 100%; padding: 14px; margin-bottom: 10px;
     border: 1px solid var(--border); border-radius: 8px;
-    font-size: 1rem; box-sizing: border-box; transition: 0.2s;
+    font-size: 1rem; transition: 0.2s;
+    background: #fff;
 }
 input:focus { outline: none; border-color: var(--primary); border-width: 2px; margin-bottom: 9px; }
 
+/* [수정] 체크박스 그룹 레이아웃 개선 */
 .checkbox-group { 
-    width: 100%; display: flex; justify-content: space-between; align-items: center; 
-    margin-bottom: 20px; 
+    width: 100%; 
+    display: flex; 
+    justify-content: space-between; /* 양쪽 끝 정렬 */
+    align-items: center; 
+    margin-bottom: 5px; /* [수정] 아래 간격 대폭 축소 */
+    font-size: 0.9rem;
+    padding: 0 2px; /* 입력창 라인과 미세 조정 */
 }
-.check-left { display: flex; gap: 15px; }
 
-.custom-checkbox { display: flex; align-items: center; cursor: pointer; color: var(--text-sub); font-size: 0.9rem; }
+/* [수정] 자동 로그인 한 줄 유지 */
+.custom-checkbox { 
+    display: flex; align-items: center; cursor: pointer; color: var(--text-sub); 
+    white-space: nowrap; /* 줄바꿈 방지 */
+}
 .custom-checkbox input { display: none; }
 .checkmark {
-    width: 18px; height: 18px; border: 2px solid var(--text-sub); border-radius: 4px; margin-right: 8px; position: relative;
+    width: 18px; height: 18px; border: 2px solid var(--text-sub); border-radius: 4px; margin-right: 6px; position: relative;
 }
 .custom-checkbox input:checked ~ .checkmark { border-color: var(--primary); background: var(--primary); }
 .custom-checkbox input:checked ~ .checkmark::after {
@@ -61,45 +81,19 @@ input:focus { outline: none; border-color: var(--primary); border-width: 2px; ma
     border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 
-/* [수정] 버튼 스타일: 파란색 테두리/박스 강제 제거 */
+/* [수정] 로그인 없이 보기 버튼 정렬 및 스타일 */
 .btn-text {
-    background-color: transparent !important;
-    border: none !important;
-    outline: none !important; /* 파란 테두리 제거 핵심 */
-    box-shadow: none !important; /* 그림자 제거 */
-    padding: 5px 0;
+    background: transparent !important; border: none !important; outline: none !important;
+    padding: 5px 0; /* 좌우 패딩 제거하여 끝 라인 맞춤 */
     width: auto;
-    color: var(--text-sub); 
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    transition: transform 0.1s ease;
-    -webkit-tap-highlight-color: transparent !important; /* 모바일 터치 박스 제거 */
+    color: var(--text-sub); font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; text-decoration: none; transition: transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent !important;
 }
+.btn-text:hover { color: var(--text-sub); text-decoration: underline; }
+.btn-text:active { color: var(--text-main); transform: scale(0.96); opacity: 0.8; }
 
-/* 포커스(클릭) 되어도 테두리 안 생기게 설정 */
-.btn-text:focus, .btn-text:focus-visible {
-    outline: none !important;
-    background: transparent !important;
-    border: none !important;
-}
-
-.btn-text:hover {
-    color: var(--text-sub); 
-    text-decoration: underline;
-}
-
-.btn-text:active {
-    color: var(--text-main);
-    transform: scale(0.96);
-    opacity: 0.8;
-    background: transparent !important; /* 눌러도 배경 투명 유지 */
-}
-
-.btn-row {
-    width: 100%; display: flex; gap: 10px;
-}
+.btn-row { width: 100%; display: flex; gap: 10px; margin-top: 5px; } /* 버튼 위 간격 조정 */
 .btn-row button { flex: 1; }
 
 button {
@@ -111,64 +105,80 @@ button {
 button:active { transform: scale(0.98); }
 button:hover { background-color: #3367d6; }
 
-.toggle-link { margin-top: 20px; font-size: 0.9rem; }
+.toggle-link { margin-top: 25px; font-size: 0.9rem; text-align: center; }
 .toggle-link a { color: var(--primary); text-decoration: none; font-weight: bold; }
-.error-msg { color: var(--holiday); font-size: 0.9rem; margin-top: 10px; min-height: 20px; text-align: center; }
+
+/* [수정] 에러 메시지 간격 조정 */
+.error-msg { 
+    color: var(--holiday); font-size: 0.9rem; 
+    margin-top: 5px; margin-bottom: 5px; /* 위아래 간격 최소화 */
+    min-height: 20px; text-align: center; line-height: 1.4; 
+}
 
 
-/* --- 캘린더 화면 --- */
+/* --- 2. 캘린더 화면 --- */
 #calendar-view { display: none; flex-direction: column; height: 100%; width: 100%; }
 
 .header {
-    padding: 15px 20px; border-bottom: 1px solid var(--border);
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
     display: flex; justify-content: space-between; align-items: center;
     background: #fff; flex-shrink: 0;
 }
-.header-left { display: flex; align-items: center; gap: 15px; }
-.church-title { font-size: 1.4rem; font-weight: 700; color: var(--text-main); margin: 0; }
+.header-left { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+.church-title { 
+    font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin: 0; 
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .liturgical-info {
-    font-size: 0.85rem; padding: 8px 16px; border-radius: 20px;
+    font-size: 0.75rem; padding: 4px 10px; border-radius: 12px;
     font-weight: 600; color: var(--lit-text); background: var(--lit-bg); white-space: nowrap;
 }
 
 .controls {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 20px; background: #fff; flex-shrink: 0;
+    padding: 8px 16px; background: #fff; flex-shrink: 0;
 }
-.nav-group { display: flex; align-items: center; gap: 10px; }
-.nav-btn { width: 32px; height: 32px; background: transparent; color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 0; display: flex; justify-content: center; align-items: center; font-size: 1rem; cursor: pointer; }
-.nav-btn:active { background: #f1f3f4; transform: scale(0.9); } 
-#current-month-year { font-size: 1.25rem; font-weight: 500; }
+.nav-group { display: flex; align-items: center; gap: 8px; }
+.nav-btn { 
+    width: 32px; height: 32px; padding: 0; 
+    background: transparent; color: var(--text-main); border: 1px solid var(--border); 
+    border-radius: 6px; display: flex; justify-content: center; align-items: center; 
+    font-size: 1rem; cursor: pointer; 
+}
+.nav-btn:active { background: #f1f3f4; transform: scale(0.95); }
+#current-month-year { font-size: 1.1rem; font-weight: 600; }
 
 .move-guide {
-    background: var(--primary); color: white; text-align: center; padding: 8px; font-size: 0.9rem; font-weight: bold;
-    animation: fadeIn 0.3s; cursor: pointer;
+    background: var(--primary); color: white; text-align: center; padding: 10px; 
+    font-size: 0.9rem; font-weight: bold; animation: fadeIn 0.3s; cursor: pointer;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; }}
 
 .calendar-grid {
     flex-grow: 1; display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    grid-template-rows: 30px repeat(6, 1fr);
-    border-top: 1px solid var(--border); overflow: hidden;
+    grid-template-rows: 28px repeat(6, 1fr);
+    border-top: 1px solid var(--border); 
+    overflow: hidden; 
 }
 
 .day-name {
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.8rem; font-weight: 600; color: var(--text-sub);
+    font-size: 0.75rem; font-weight: 600; color: var(--text-sub);
     border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
-    background: #fff;
+    background: #f8f9fa;
 }
 .day-name:last-child { border-right: none; }
 .day-name.sun { color: var(--holiday); }
 
 .day {
     border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
-    background: #fff; padding: 4px; cursor: pointer;
-    display: flex; flex-direction: column; min-height: 0; 
-    transition: background 0.1s;
+    background: #fff; padding: 2px; cursor: pointer;
+    display: flex; flex-direction: column; 
+    min-height: 0; 
     overflow: hidden;
+    transition: background 0.1s;
 }
 .day:nth-child(7n) { border-right: none; }
 .day:active { background-color: #f1f3f4; }
@@ -176,95 +186,122 @@ button:hover { background-color: #3367d6; }
 .day.target-mode { background-color: #f1f8e9; }
 
 .day span.date-num {
-    font-size: 0.85rem; font-weight: 500; color: var(--text-main);
-    width: 24px; height: 24px; line-height: 24px; text-align: center;
-    border-radius: 50%; display: block; margin-bottom: 2px;
+    font-size: 0.8rem; font-weight: 500; color: var(--text-main);
+    width: 22px; height: 22px; line-height: 22px; text-align: center;
+    border-radius: 50%; display: block; margin: 2px 0 2px 2px;
 }
 .day.sun span.date-num { color: var(--holiday); }
-.day.today span.date-num { background: var(--primary); color: white !important; }
+.day.today span.date-num { background: var(--primary); color: white !important; font-weight: 700; }
 
-.badge-container { flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.badge-container { 
+    flex: 1; display: flex; flex-direction: column; gap: 2px; 
+    overflow: hidden; 
+    padding-bottom: 2px;
+}
+
 .badge {
-    font-size: 0.75rem; padding: 2px 6px; border-radius: 4px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 0.7rem; padding: 2px 4px; border-radius: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
     text-align: left; font-weight: 500; cursor: pointer;
-    color: white; user-select: none;
+    color: white; user-select: none; line-height: 1.3;
+    margin: 0 1px;
 }
 .badge:active { opacity: 0.6; transform: scale(0.98); }
 .badge.dragging { opacity: 0.5; }
-.badge.moving-selected { border: 2px solid #333; opacity: 0.7; transform: scale(0.95); }
+.badge.moving-selected { border: 2px solid #333; opacity: 0.8; transform: scale(0.95); }
 
-.holiday-badge { background: var(--holiday-bg); color: var(--holiday); }
-.lit-badge { background: var(--lit-bg); color: var(--lit-text); }
+.holiday-badge { background: var(--holiday-bg); color: var(--holiday); font-weight: 600; font-size: 0.65rem; }
+.lit-badge { background: var(--lit-bg); color: var(--lit-text); font-size: 0.65rem; }
 
 .footer-bar {
-    padding: 10px 20px; 
+    padding: 10px 16px; 
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border);
-    display: flex; justify-content: flex-end; gap: 10px;
+    display: flex; justify-content: flex-end; gap: 8px;
     background: #fff; flex-shrink: 0; z-index: 100;
 }
-.footer-bar button { width: auto; padding: 10px 20px; font-size: 0.9rem; }
+.footer-bar button { width: auto; padding: 10px 16px; font-size: 0.9rem; }
 .btn-outline { background: white; color: var(--text-main); border: 1px solid var(--border); }
 .btn-outline:hover { background: #f1f3f4; }
 
+/* --- 3. 모달 --- */
 .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.5); z-index: 1000;
     justify-content: center; align-items: center; backdrop-filter: blur(2px);
+    padding: 20px;
 }
 .modal-box {
-    background: white; width: 90%; max-width: 420px;
+    background: white; width: 100%; max-width: 400px;
     border-radius: 16px; padding: 24px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
     animation: popIn 0.2s ease-out;
+    max-height: 90vh; overflow-y: auto;
 }
-@keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .modal-box h3 { margin: 0 0 20px 0; font-size: 1.2rem; color: var(--text-main); }
 .modal-body { display: flex; flex-direction: column; gap: 15px; }
 .modal-body label { font-size: 0.85rem; font-weight: 600; color: var(--text-sub); margin-bottom: -8px; }
 
-.modal-body input[type="text"], .modal-body textarea, .modal-body input[type="date"], .modal-body input[type="time"] {
-    width: 100%; padding: 10px;
+.modal-body input[type="text"], 
+.modal-body textarea, 
+.modal-body input[type="date"], 
+.modal-body input[type="time"] {
+    width: 100%; padding: 12px;
     border: 1px solid var(--border); border-radius: 8px;
-    font-size: 0.95rem; font-family: inherit; background: #f8f9fa; box-sizing: border-box;
+    font-size: 16px; 
+    font-family: inherit; background: #f8f9fa; box-sizing: border-box;
 }
-.modal-body textarea { resize: none; }
+.modal-body textarea { resize: none; min-height: 80px; }
 
-.date-range-group { display: flex; flex-direction: column; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+.date-range-group { display: flex; flex-direction: column; gap: 10px; background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
 .date-range-group .row { display: flex; align-items: center; gap: 10px; }
-.date-range-group label { width: 40px; margin-bottom: 0; }
-.date-range-group input { background: white; margin-bottom: 0; }
+.date-range-group label { width: 35px; margin-bottom: 0; font-size: 0.9rem; }
+.date-range-group input { background: white; margin-bottom: 0; padding: 8px; font-size: 0.9rem; }
 
-.color-palette { display: flex; gap: 10px; margin-top: 5px; }
+.color-palette { display: flex; gap: 12px; margin-top: 5px; justify-content: flex-start; }
 .color-option {
-    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
     border: 2px solid transparent; transition: 0.2s;
 }
 .color-option:hover { transform: scale(1.1); }
 .color-option.selected { border-color: #333; transform: scale(1.1); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
-.modal-footer { margin-top: 24px; display: flex; justify-content: space-between; }
+.modal-footer { margin-top: 24px; display: flex; justify-content: space-between; align-items: center; }
 .right-btns { display: flex; gap: 8px; }
-.modal-footer button { width: auto; padding: 10px 18px; font-size: 0.9rem; }
+.modal-footer button { width: auto; padding: 10px 16px; font-size: 0.9rem; }
 .btn-save { background: var(--primary); color: white; }
 .btn-cancel { background: #f1f3f4; color: var(--text-main); }
-.btn-delete { background: transparent; color: #d93025; border: 1px solid #d93025; }
+.btn-delete { background: transparent; color: #d93025; border: 1px solid #d93025; padding: 9px 14px;}
 .btn-delete:hover { background: #fce8e6; }
 
 .expanded-badge-card {
-    position: fixed;
-    z-index: 2000;
-    width: max-content;
-    max-width: 250px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    font-size: 0.85rem;
-    font-weight: 500;
-    white-space: normal;
-    line-height: 1.4;
-    cursor: pointer;
-    animation: fadeIn 0.15s ease-out;
+    position: fixed; z-index: 2000;
+    width: auto; max-width: 280px;
+    padding: 10px 14px; border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    font-size: 0.9rem; font-weight: 500;
+    white-space: normal; line-height: 1.4;
+    cursor: pointer; animation: fadeIn 0.15s ease-out;
+}
+
+@media (max-width: 768px) {
+    .header { padding: 10px 12px; }
+    .church-title { font-size: 1.1rem; }
+    .liturgical-info { font-size: 0.7rem; padding: 3px 8px; }
+    .nav-btn { width: 36px; height: 36px; } 
+    .calendar-grid { grid-template-rows: 24px repeat(6, 1fr); }
+    .day span.date-num { width: 20px; height: 20px; line-height: 20px; font-size: 0.75rem; }
+    .badge { font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; margin-bottom: 1px; }
+    .holiday-badge, .lit-badge { font-size: 0.6rem; }
+    .footer-bar button { padding: 12px 16px; font-size: 0.95rem; } 
+    .modal-box { padding: 20px; width: 95%; }
+    .btn-row { flex-direction: row; }
+}
+
+@media (max-width: 360px) {
+    .church-title { font-size: 1rem; }
+    #current-month-year { font-size: 1rem; }
+    .badge { font-size: 0.6rem; }
 }
