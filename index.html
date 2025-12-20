@@ -19,10 +19,17 @@
             </div>
 
             <div class="checkbox-group">
-                <label class="custom-checkbox">
-                    <input type="checkbox" id="auto-login-check">
-                    <span class="checkmark"></span> 자동 로그인
-                </label>
+                <div class="check-left">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="remember-check">
+                        <span class="checkmark"></span> 저장
+                    </label>
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="auto-login-check">
+                        <span class="checkmark"></span> 자동 로그인
+                    </label>
+                </div>
+                
                 <button onclick="handleGuestLogin()" class="btn-text">로그인 없이 보기</button>
             </div>
             
@@ -43,6 +50,25 @@
                 <div class="header-left">
                     <h1 class="church-title" id="display-church-name">교회명</h1>
                     <span class="liturgical-info" id="liturgical-season">절기</span>
+                </div>
+                
+                <div class="header-right">
+                    <button onclick="shareMonth()" class="icon-btn" aria-label="일정 공유">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                    </button>
+                    <button onclick="logout()" class="icon-btn" aria-label="로그아웃">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -67,11 +93,6 @@
                 <div class="day-name">목</div>
                 <div class="day-name">금</div>
                 <div class="day-name">토</div>
-            </div>
-            
-            <div class="footer-bar">
-                <button onclick="shareMonth()">일정 공유</button>
-                <button onclick="logout()" class="btn-outline">나가기</button>
             </div>
         </div>
     </div>

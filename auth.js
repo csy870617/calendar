@@ -20,7 +20,7 @@ export async function handleAuthAction() {
     const pw = document.getElementById('church-pw').value.trim();
     const errorMsg = document.getElementById('error-msg');
     
-    // [수정] '저장' 체크박스 제거됨. '자동 로그인' 체크박스만 사용.
+    const rememberCheck = document.getElementById('remember-check');
     const autoLoginCheck = document.getElementById('auto-login-check');
 
     if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
@@ -48,9 +48,14 @@ export async function handleAuthAction() {
                 if (!querySnapshot.empty) {
                     const docSnap = querySnapshot.docs[0];
                     
-                    // [수정] 자동 로그인 체크 시 로컬스토리지 저장
-                    if (autoLoginCheck && autoLoginCheck.checked) {
-                        const authData = { name, pw, autoLogin: true };
+                    // [수정] 저장 또는 자동 로그인 체크 시 데이터 저장
+                    if (rememberCheck.checked || autoLoginCheck.checked) {
+                        const authData = { 
+                            name, 
+                            pw, 
+                            autoLogin: autoLoginCheck.checked,
+                            remember: rememberCheck.checked
+                        };
                         localStorage.setItem('churchAuthData', JSON.stringify(authData));
                     } else {
                         localStorage.removeItem('churchAuthData');
@@ -95,19 +100,27 @@ export async function handleGuestLogin() {
 export function logout() {
     const savedAuth = JSON.parse(localStorage.getItem('churchAuthData'));
     if (savedAuth) {
-        // 로그아웃 시 자동 로그인 정보는 삭제하거나 false로 변경
-        localStorage.removeItem('churchAuthData'); 
+        // 로그아웃 시 자동 로그인만 해제 (저장은 유지될 수 있음)
+        savedAuth.autoLogin = false;
+        localStorage.setItem('churchAuthData', JSON.stringify(savedAuth));
     }
     location.reload();
 }
 
 export function checkAutoLogin() {
     const savedAuth = JSON.parse(localStorage.getItem('churchAuthData'));
-    if (savedAuth && savedAuth.autoLogin) {
+    if (savedAuth) {
         document.getElementById('church-name').value = savedAuth.name || "";
         document.getElementById('church-pw').value = savedAuth.pw || "";
-        document.getElementById('auto-login-check').checked = true;
-        handleAuthAction();
+        
+        if (savedAuth.remember) {
+            document.getElementById('remember-check').checked = true;
+        }
+        
+        if (savedAuth.autoLogin) {
+            document.getElementById('auto-login-check').checked = true;
+            handleAuthAction();
+        }
     }
 }
 

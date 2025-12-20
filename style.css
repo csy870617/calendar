@@ -55,21 +55,23 @@ input {
 }
 input:focus { outline: none; border-color: var(--primary); border-width: 2px; margin-bottom: 9px; }
 
-/* [수정] 체크박스 그룹 레이아웃 개선 */
+/* 체크박스 그룹 */
 .checkbox-group { 
     width: 100%; 
     display: flex; 
-    justify-content: space-between; /* 양쪽 끝 정렬 */
+    justify-content: space-between; 
     align-items: center; 
-    margin-bottom: 5px; /* [수정] 아래 간격 대폭 축소 */
+    margin-bottom: 5px; 
     font-size: 0.9rem;
-    padding: 0 2px; /* 입력창 라인과 미세 조정 */
+    padding: 0 2px; 
 }
 
-/* [수정] 자동 로그인 한 줄 유지 */
+/* [NEW] 왼쪽 체크박스 묶음 (저장, 자동로그인 사이 간격) */
+.check-left { display: flex; gap: 15px; }
+
 .custom-checkbox { 
     display: flex; align-items: center; cursor: pointer; color: var(--text-sub); 
-    white-space: nowrap; /* 줄바꿈 방지 */
+    white-space: nowrap; 
 }
 .custom-checkbox input { display: none; }
 .checkmark {
@@ -81,11 +83,9 @@ input:focus { outline: none; border-color: var(--primary); border-width: 2px; ma
     border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 
-/* [수정] 로그인 없이 보기 버튼 정렬 및 스타일 */
 .btn-text {
     background: transparent !important; border: none !important; outline: none !important;
-    padding: 5px 0; /* 좌우 패딩 제거하여 끝 라인 맞춤 */
-    width: auto;
+    padding: 5px 0; width: auto;
     color: var(--text-sub); font-size: 0.85rem; font-weight: 500;
     cursor: pointer; text-decoration: none; transition: transform 0.1s ease;
     -webkit-tap-highlight-color: transparent !important;
@@ -93,7 +93,7 @@ input:focus { outline: none; border-color: var(--primary); border-width: 2px; ma
 .btn-text:hover { color: var(--text-sub); text-decoration: underline; }
 .btn-text:active { color: var(--text-main); transform: scale(0.96); opacity: 0.8; }
 
-.btn-row { width: 100%; display: flex; gap: 10px; margin-top: 5px; } /* 버튼 위 간격 조정 */
+.btn-row { width: 100%; display: flex; gap: 10px; margin-top: 5px; } 
 .btn-row button { flex: 1; }
 
 button {
@@ -108,10 +108,8 @@ button:hover { background-color: #3367d6; }
 .toggle-link { margin-top: 25px; font-size: 0.9rem; text-align: center; }
 .toggle-link a { color: var(--primary); text-decoration: none; font-weight: bold; }
 
-/* [수정] 에러 메시지 간격 조정 */
 .error-msg { 
-    color: var(--holiday); font-size: 0.9rem; 
-    margin-top: 5px; margin-bottom: 5px; /* 위아래 간격 최소화 */
+    color: var(--holiday); font-size: 0.9rem; margin-top: 5px; margin-bottom: 5px;
     min-height: 20px; text-align: center; line-height: 1.4; 
 }
 
@@ -124,7 +122,7 @@ button:hover { background-color: #3367d6; }
     display: flex; justify-content: space-between; align-items: center;
     background: #fff; flex-shrink: 0;
 }
-.header-left { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+.header-left { display: flex; align-items: center; gap: 10px; overflow: hidden; flex: 1; }
 .church-title { 
     font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin: 0; 
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -134,6 +132,18 @@ button:hover { background-color: #3367d6; }
     font-size: 0.75rem; padding: 4px 10px; border-radius: 12px;
     font-weight: 600; color: var(--lit-text); background: var(--lit-bg); white-space: nowrap;
 }
+
+.header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.icon-btn {
+    width: 36px; height: 36px; padding: 0;
+    background: transparent !important; color: var(--text-sub) !important;
+    border: none; border-radius: 50%;
+    display: flex; justify-content: center; align-items: center;
+    cursor: pointer; transition: background 0.2s;
+}
+.icon-btn svg { width: 20px; height: 20px; stroke-width: 2px; }
+.icon-btn:hover { background: #f1f3f4 !important; color: var(--text-main) !important; }
+.icon-btn:active { transform: scale(0.9); background: #e8f0fe !important; }
 
 .controls {
     display: flex; justify-content: space-between; align-items: center;
@@ -213,17 +223,6 @@ button:hover { background-color: #3367d6; }
 .holiday-badge { background: var(--holiday-bg); color: var(--holiday); font-weight: 600; font-size: 0.65rem; }
 .lit-badge { background: var(--lit-bg); color: var(--lit-text); font-size: 0.65rem; }
 
-.footer-bar {
-    padding: 10px 16px; 
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--border);
-    display: flex; justify-content: flex-end; gap: 8px;
-    background: #fff; flex-shrink: 0; z-index: 100;
-}
-.footer-bar button { width: auto; padding: 10px 16px; font-size: 0.9rem; }
-.btn-outline { background: white; color: var(--text-main); border: 1px solid var(--border); }
-.btn-outline:hover { background: #f1f3f4; }
-
 /* --- 3. 모달 --- */
 .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -290,12 +289,13 @@ button:hover { background-color: #3367d6; }
     .header { padding: 10px 12px; }
     .church-title { font-size: 1.1rem; }
     .liturgical-info { font-size: 0.7rem; padding: 3px 8px; }
+    .icon-btn { width: 32px; height: 32px; }
     .nav-btn { width: 36px; height: 36px; } 
     .calendar-grid { grid-template-rows: 24px repeat(6, 1fr); }
     .day span.date-num { width: 20px; height: 20px; line-height: 20px; font-size: 0.75rem; }
     .badge { font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; margin-bottom: 1px; }
     .holiday-badge, .lit-badge { font-size: 0.6rem; }
-    .footer-bar button { padding: 12px 16px; font-size: 0.95rem; } 
+    
     .modal-box { padding: 20px; width: 95%; }
     .btn-row { flex-direction: row; }
 }
