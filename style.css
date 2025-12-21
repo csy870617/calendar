@@ -151,8 +151,13 @@ button:hover { background-color: #3367d6; }
     background: transparent; color: var(--text-main); border: 1px solid var(--border); 
     border-radius: 6px; display: flex; justify-content: center; align-items: center; 
     font-size: 1rem; cursor: pointer; 
+    /* 모바일 터치 하이라이트 제거 */
+    -webkit-tap-highlight-color: transparent;
 }
+
+/* [수정] 누를 때만 색 변경, 떼면 원래대로 */
 .nav-btn:active { background: #f1f3f4; transform: scale(0.95); }
+.nav-btn:focus { outline: none; background: transparent; } /* 포커스 시 색상 유지 방지 */
 #current-month-year { font-size: 1.1rem; font-weight: 600; }
 
 .move-guide {
@@ -281,13 +286,28 @@ button:hover { background-color: #3367d6; }
 .date-range-group label { width: 35px; margin-bottom: 0; font-size: 0.9rem; }
 .date-range-group input { background: white; margin-bottom: 0; padding: 8px; font-size: 0.9rem; }
 
-.color-palette { display: flex; gap: 12px; margin-top: 5px; justify-content: flex-start; }
+/* [수정] 7개씩 2줄 그리드 레이아웃 적용 */
+.color-palette { 
+    display: grid;
+    grid-template-columns: repeat(7, 1fr); /* 7개의 균등한 열 */
+    gap: 10px; /* 색상 사이 간격 */
+    margin-top: 10px;
+    justify-items: center; /* 격자 내 중앙 정렬 */
+}
+
 .color-option {
     width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
     border: 2px solid transparent; transition: 0.2s;
+    /* 선택 시 테두리가 안쪽으로 생겨 크기 변화 방지 */
+    box-sizing: border-box; 
 }
 .color-option:hover { transform: scale(1.1); }
-.color-option.selected { border-color: #333; transform: scale(1.1); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+/* 선택된 상태: 흰색 테두리와 그림자로 강조 */
+.color-option.selected { 
+    border-color: #fff; 
+    box-shadow: 0 0 0 2px #333; /* 이중 테두리 효과 */
+    transform: scale(1.1); 
+}
 
 .modal-footer { margin-top: 24px; display: flex; justify-content: space-between; align-items: center; }
 .right-btns { display: flex; gap: 8px; }

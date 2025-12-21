@@ -1,12 +1,11 @@
 import { db } from './firebase.js';
 import { doc, getDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { state } from './store.js';
-// utils.js에서 날짜 관련 함수 제외 (충돌 방지)
 import { generateUUID, calculateYearlyData } from './utils.js'; 
 import { handleAuthAction, handleGuestLogin, logout, checkAutoLogin, toggleMode, inviteUser } from './auth.js';
 
 // ==========================================
-// [1] 핵심 유틸리티 (날짜 포맷 통일)
+// [1] 핵심 유틸리티
 // ==========================================
 
 function formatDateKey(year, month, day) {
@@ -36,6 +35,24 @@ function getEventsArray(dateKey) {
     else return [{ id: generateUUID(), title: rawData, isAllDay: true, color: "#4285F4" }];
 }
 
+// [Helper] 저장/삭제 후 달력으로 복귀 (모든 팝업 닫기)
+function closeAndReturnToCalendar() {
+    const listModal = document.getElementById('list-modal');
+    const eventModal = document.getElementById('event-modal');
+    
+    // 목록 팝업이 열려있는 상태에서 들어왔다면 (중첩 모달)
+    if (listModal.style.display === 'flex') {
+        // 즉시 숨김 처리 (깜빡임 방지)
+        eventModal.style.display = 'none';
+        listModal.style.display = 'none';
+        // 히스토리 2단계 뒤로 (Event -> List -> Calendar)
+        history.go(-2);
+    } else {
+        // 단독 실행이었다면 1단계 뒤로
+        history.back();
+    }
+}
+
 // ==========================================
 // [2] 일정 이동 및 저장 로직
 // ==========================================
@@ -59,7 +76,6 @@ async function moveEvent(eventData, newStartDateStr) {
 
     let tempUpdates = {};
 
-    // 1. 기존 날짜 제거
     let tempDate = new Date(oldStart);
     const tempEndObj = new Date(oldEnd);
     
@@ -74,11 +90,9 @@ async function moveEvent(eventData, newStartDateStr) {
         tempDate.setDate(tempDate.getDate() + 1);
     }
 
-    // 2. 데이터 업데이트
     eventData.startDate = newStartStr;
     eventData.endDate = newEndStr;
 
-    // 3. 새 날짜 추가
     let loopDate = new Date(newStart);
     const finalEndObj = new Date(newEnd);
     
@@ -98,7 +112,6 @@ async function moveEvent(eventData, newStartDateStr) {
         loopDate.setDate(loopDate.getDate() + 1);
     }
 
-    // 4. DB 반영
     let finalUpdates = {};
     for (const [key, val] of Object.entries(tempUpdates)) {
         if (val === "DELETE") finalUpdates[`events.${key}`] = deleteField();
@@ -180,7 +193,8 @@ async function saveSchedule() {
 
     try {
         await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
-        closeModal();
+        // [수정] 성공 시 달력 화면으로 완전 복귀
+        closeAndReturnToCalendar();
     } catch(e) {
         alert("저장 실패: " + e.message);
     }
@@ -203,12 +217,13 @@ async function deleteSchedule() {
     if(Object.keys(finalUpdates).length > 0) {
         try {
             await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
-            closeModal();
+            // [수정] 성공 시 달력 화면으로 완전 복귀
+            closeAndReturnToCalendar();
         } catch(e) {
             alert("삭제 실패: " + e.message);
         }
     } else {
-        closeModal();
+        closeAndReturnToCalendar();
     }
 }
 
@@ -241,7 +256,6 @@ function enterService(docId, name, isManager) {
     initGestures();
 }
 
-// [핵심 수정] 달력 렌더링 (헤더 자동 생성 포함)
 function renderCalendar() {
     const existingOverlay = document.querySelector('.expanded-badge-card');
     if (existingOverlay) existingOverlay.remove();
@@ -253,13 +267,11 @@ function renderCalendar() {
     
     document.getElementById('move-guide').onclick = exitMoveMode;
 
-    // [중요] 그리드 전체 초기화 (헤더가 없으면 다시 그리기 위해)
     grid.innerHTML = ''; 
 
     monthDisplay.innerText = `${state.currentYear}년 ${state.currentMonth + 1}월`;
     updateLiturgicalBadge(seasonDisplay);
 
-    // [1] 요일 헤더 생성 (강제 삽입 - 첫째 주 밀림 방지)
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
     dayNames.forEach((name, index) => {
         const header = document.createElement('div');
@@ -269,7 +281,6 @@ function renderCalendar() {
         grid.appendChild(header);
     });
 
-    // [2] 날짜 계산
     const firstDayOfMonth = new Date(state.currentYear, state.currentMonth, 1);
     const lastDayOfMonth = new Date(state.currentYear, state.currentMonth + 1, 0);
     
@@ -277,7 +288,6 @@ function renderCalendar() {
     const totalDays = lastDayOfMonth.getDate();
     const prevMonthLastDate = new Date(state.currentYear, state.currentMonth, 0).getDate();
 
-    // [3] 이전 달 날짜
     for (let i = 0; i < startDayOfWeek; i++) {
         const dayNum = prevMonthLastDate - startDayOfWeek + i + 1;
         let pm = state.currentMonth - 1;
@@ -286,12 +296,10 @@ function renderCalendar() {
         createDayCell(grid, py, pm, dayNum, true);
     }
 
-    // [4] 이번 달 날짜
     for (let i = 1; i <= totalDays; i++) {
         createDayCell(grid, state.currentYear, state.currentMonth, i, false);
     }
 
-    // [5] 다음 달 날짜
     const filledCells = startDayOfWeek + totalDays;
     const remainingCells = 42 - filledCells;
     
