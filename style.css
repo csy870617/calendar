@@ -37,7 +37,9 @@ body {
     box-shadow: 0 0 20px rgba(0,0,0,0.05);
 }
 
-/* --- 1. 로그인/등록 화면 --- */
+/* =========================================
+   1. 로그인/등록 화면
+   ========================================= */
 #auth-view {
     flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
     padding: 30px; width: 100%; max-width: 420px; margin: 0 auto;
@@ -55,18 +57,10 @@ input {
 }
 input:focus { outline: none; border-color: var(--primary); border-width: 2px; margin-bottom: 9px; }
 
-/* 체크박스 그룹 */
 .checkbox-group { 
-    width: 100%; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    margin-bottom: 5px; 
-    font-size: 0.9rem;
-    padding: 0 2px; 
+    width: 100%; display: flex; justify-content: space-between; align-items: center; 
+    margin-bottom: 5px; font-size: 0.9rem; padding: 0 2px; 
 }
-
-/* [NEW] 왼쪽 체크박스 묶음 (저장, 자동로그인 사이 간격) */
 .check-left { display: flex; gap: 15px; }
 
 .custom-checkbox { 
@@ -114,7 +108,9 @@ button:hover { background-color: #3367d6; }
 }
 
 
-/* --- 2. 캘린더 화면 --- */
+/* =========================================
+   2. 캘린더 화면
+   ========================================= */
 #calendar-view { display: none; flex-direction: column; height: 100%; width: 100%; }
 
 .header {
@@ -165,12 +161,20 @@ button:hover { background-color: #3367d6; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; }}
 
+/* [핵심] 달력 그리드 */
 .calendar-grid {
-    flex-grow: 1; display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 
+       -> 내용물 크기 무시하고 무조건 부모의 남은 공간을 100% 차지함 */
+    flex: 1 1 0; 
+    
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    /* 요일(28px) + 나머지 6주(1fr) 균등 분할 */
     grid-template-rows: 28px repeat(6, 1fr);
+    
     border-top: 1px solid var(--border); 
     overflow: hidden; 
+    min-height: 0; /* Flexbox 내부 스크롤/크기 버그 방지 */
 }
 
 .day-name {
@@ -194,6 +198,14 @@ button:hover { background-color: #3367d6; }
 .day:active { background-color: #f1f3f4; }
 .day.drag-over { background-color: #e8f0fe; border: 2px dashed var(--primary); }
 .day.target-mode { background-color: #f1f8e9; }
+
+.day.other-month {
+    background-color: #fcfcfc;
+    color: var(--text-sub);
+    opacity: 0.6;
+}
+.day.other-month span.date-num { color: #ccc; }
+.day.other-month:hover { opacity: 1; background-color: #fff; }
 
 .day span.date-num {
     font-size: 0.8rem; font-weight: 500; color: var(--text-main);
@@ -223,13 +235,23 @@ button:hover { background-color: #3367d6; }
 .holiday-badge { background: var(--holiday-bg); color: var(--holiday); font-weight: 600; font-size: 0.65rem; }
 .lit-badge { background: var(--lit-bg); color: var(--lit-text); font-size: 0.65rem; }
 
-/* --- 3. 모달 --- */
+
+/* =========================================
+   3. 모달 (팝업)
+   ========================================= */
 .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.5); z-index: 1000;
+    background: rgba(0, 0, 0, 0.5); 
     justify-content: center; align-items: center; backdrop-filter: blur(2px);
     padding: 20px;
 }
+
+/* 목록 모달 */
+#list-modal { z-index: 1500; }
+
+/* 입력/수정 모달 (목록보다 위에) */
+#event-modal { z-index: 2000; }
+
 .modal-box {
     background: white; width: 100%; max-width: 400px;
     border-radius: 16px; padding: 24px;
@@ -275,8 +297,29 @@ button:hover { background-color: #3367d6; }
 .btn-delete { background: transparent; color: #d93025; border: 1px solid #d93025; padding: 9px 14px;}
 .btn-delete:hover { background: #fce8e6; }
 
+/* 일정 목록 */
+.event-list-container {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 8px;
+    margin-bottom: 10px;
+}
+.event-list-item {
+    display: flex; align-items: center; padding: 12px;
+    border-radius: 8px; background: #f8f9fa; border: 1px solid var(--border);
+    cursor: pointer; transition: background 0.2s;
+}
+.event-list-item:hover { background: #f1f3f4; }
+.event-list-item:active { transform: scale(0.98); }
+
+.event-color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
+.event-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.event-title { font-size: 0.95rem; font-weight: 600; color: var(--text-main); }
+.event-time { font-size: 0.8rem; color: var(--text-sub); }
+.empty-list-msg { text-align: center; color: var(--text-sub); padding: 20px 0; font-size: 0.9rem; }
+
 .expanded-badge-card {
-    position: fixed; z-index: 2000;
+    position: fixed; z-index: 3000;
     width: auto; max-width: 280px;
     padding: 10px 14px; border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.25);
@@ -285,13 +328,20 @@ button:hover { background-color: #3367d6; }
     cursor: pointer; animation: fadeIn 0.15s ease-out;
 }
 
+.badge-container::-webkit-scrollbar { display: none; }
+
 @media (max-width: 768px) {
     .header { padding: 10px 12px; }
     .church-title { font-size: 1.1rem; }
     .liturgical-info { font-size: 0.7rem; padding: 3px 8px; }
     .icon-btn { width: 32px; height: 32px; }
     .nav-btn { width: 36px; height: 36px; } 
-    .calendar-grid { grid-template-rows: 24px repeat(6, 1fr); }
+    
+    /* [정답 수정] 1fr -> minmax(0, 1fr)로 변경하여 강제 균등 분배 */
+    .calendar-grid { 
+        grid-template-rows: 24px repeat(6, minmax(0, 1fr)); 
+    }
+    
     .day span.date-num { width: 20px; height: 20px; line-height: 20px; font-size: 0.75rem; }
     .badge { font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; margin-bottom: 1px; }
     .holiday-badge, .lit-badge { font-size: 0.6rem; }

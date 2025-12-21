@@ -1,53 +1,112 @@
 import { db } from './firebase.js';
 import { doc, getDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { state } from './store.js';
-import { createLocalDate, formatLocalDate, toKeyFormat, generateUUID, calculateYearlyData } from './utils.js';
+// utils.js에서 날짜 관련 함수 제외 (충돌 방지)
+import { generateUUID, calculateYearlyData } from './utils.js'; 
 import { handleAuthAction, handleGuestLogin, logout, checkAutoLogin, toggleMode, inviteUser } from './auth.js';
 
 // ==========================================
-// [1] 기능 함수 정의
+// [1] 핵심 유틸리티 (날짜 포맷 통일)
+// ==========================================
+
+function formatDateKey(year, month, day) {
+    if (year instanceof Date) {
+        const d = year;
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+}
+
+function parseDateStr(dateStr) {
+    if (!dateStr) return new Date();
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+function getEventsArray(dateKey) {
+    const rawData = state.eventsCache[dateKey];
+    if (!rawData) return [];
+    if (rawData.startsWith('[')) return JSON.parse(rawData);
+    else if (rawData.startsWith('{')) return [JSON.parse(rawData)];
+    else return [{ id: generateUUID(), title: rawData, isAllDay: true, color: "#4285F4" }];
+}
+
+// ==========================================
+// [2] 일정 이동 및 저장 로직
 // ==========================================
 
 async function moveEvent(eventData, newStartDateStr) {
-    const oldStart = createLocalDate(eventData.startDate);
-    const oldEnd = createLocalDate(eventData.endDate);
-    const durationMs = oldEnd.getTime() - oldStart.getTime(); 
-    const newStart = createLocalDate(newStartDateStr);
-    const newEndMs = newStart.getTime() + durationMs;
-    const newEnd = new Date(newEndMs);
+    const oldStart = parseDateStr(eventData.startDate);
+    const oldEnd = parseDateStr(eventData.endDate);
+    const newStart = parseDateStr(newStartDateStr);
+    
+    const diffTime = Math.abs(oldEnd - oldStart);
+    const durationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    const newEnd = new Date(newStart);
+    newEnd.setDate(newEnd.getDate() + durationDays);
 
-    const newStartStr = formatLocalDate(newStart);
-    const newEndStr = formatLocalDate(newEnd);
-
+    const newStartStr = formatDateKey(newStart);
+    const newEndStr = formatDateKey(newEnd);
     const eventId = eventData.id;
-    if (!eventId) {
-        alert("구 데이터 형식입니다. 일정을 열어서 다시 저장해주세요.");
-        return;
+
+    if (!eventId) { alert("데이터 오류: ID가 없습니다."); return; }
+
+    let tempUpdates = {};
+
+    // 1. 기존 날짜 제거
+    let tempDate = new Date(oldStart);
+    const tempEndObj = new Date(oldEnd);
+    
+    while(tempDate <= tempEndObj) {
+        const key = formatDateKey(tempDate);
+        let arr = getEventsArray(key);
+        const newArr = arr.filter(e => e.id !== eventId);
+        
+        if (newArr.length === 0) tempUpdates[key] = "DELETE";
+        else tempUpdates[key] = JSON.stringify(newArr);
+        
+        tempDate.setDate(tempDate.getDate() + 1);
     }
 
-    let updates = {};
-
-    Object.keys(state.eventsCache).forEach(key => {
-        const data = state.eventsCache[key];
-        if (data && typeof data === 'string' && data.includes(eventId)) {
-            updates[`events.${key}`] = deleteField();
-        }
-    });
-
+    // 2. 데이터 업데이트
     eventData.startDate = newStartStr;
     eventData.endDate = newEndStr;
+
+    // 3. 새 날짜 추가
+    let loopDate = new Date(newStart);
+    const finalEndObj = new Date(newEnd);
     
-    let loopDate = createLocalDate(newStartStr);
-    const finalDate = createLocalDate(newEndStr);
-    
-    while(loopDate <= finalDate) {
-        const key = `${loopDate.getFullYear()}-${loopDate.getMonth()+1}-${loopDate.getDate()}`;
-        updates[`events.${key}`] = JSON.stringify(eventData);
+    while(loopDate <= finalEndObj) {
+        const key = formatDateKey(loopDate);
+        let currentArr = [];
+
+        if (tempUpdates[key] !== undefined) {
+            if (tempUpdates[key] === "DELETE") currentArr = [];
+            else currentArr = JSON.parse(tempUpdates[key]);
+        } else {
+            currentArr = getEventsArray(key);
+        }
+        
+        currentArr.push(eventData);
+        tempUpdates[key] = JSON.stringify(currentArr);
         loopDate.setDate(loopDate.getDate() + 1);
     }
 
+    // 4. DB 반영
+    let finalUpdates = {};
+    for (const [key, val] of Object.entries(tempUpdates)) {
+        if (val === "DELETE") finalUpdates[`events.${key}`] = deleteField();
+        else finalUpdates[`events.${key}`] = val;
+    }
+
     try {
-        await updateDoc(doc(db, "churches", state.churchInfo.id), updates);
+        await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
     } catch(e) {
         alert("이동 실패: " + e.message);
     }
@@ -80,29 +139,48 @@ async function saveSchedule() {
         desc: descVal
     };
 
-    let newUpdates = {};
+    let tempUpdates = {};
 
     if (state.currentEditingId) {
         Object.keys(state.eventsCache).forEach(key => {
-            const data = state.eventsCache[key];
-            if (data && typeof data === 'string' && data.includes(state.currentEditingId)) {
-                newUpdates[`events.${key}`] = deleteField();
+            let arr = getEventsArray(key);
+            const exists = arr.find(e => e.id === state.currentEditingId);
+            if (exists) {
+                const newArr = arr.filter(e => e.id !== state.currentEditingId);
+                if (newArr.length === 0) tempUpdates[key] = "DELETE";
+                else tempUpdates[key] = JSON.stringify(newArr);
             }
         });
     }
 
-    let loopDate = createLocalDate(startDateVal);
-    const endDate = createLocalDate(endDateVal);
+    let loopDate = parseDateStr(startDateVal);
+    const finalEndObj = parseDateStr(endDateVal);
     
-    while(loopDate <= endDate) {
-        const key = `${loopDate.getFullYear()}-${loopDate.getMonth()+1}-${loopDate.getDate()}`;
-        newUpdates[`events.${key}`] = JSON.stringify(eventObj);
+    while(loopDate <= finalEndObj) {
+        const key = formatDateKey(loopDate);
+        let currentArr = [];
+
+        if (tempUpdates[key] !== undefined) {
+            if (tempUpdates[key] === "DELETE") currentArr = [];
+            else currentArr = JSON.parse(tempUpdates[key]);
+        } else {
+            currentArr = getEventsArray(key);
+        }
+
+        currentArr.push(eventObj);
+        tempUpdates[key] = JSON.stringify(currentArr);
         loopDate.setDate(loopDate.getDate() + 1);
     }
 
+    let finalUpdates = {};
+    for (const [key, val] of Object.entries(tempUpdates)) {
+        if (val === "DELETE") finalUpdates[`events.${key}`] = deleteField();
+        else finalUpdates[`events.${key}`] = val;
+    }
+
     try {
-        await updateDoc(doc(db, "churches", state.churchInfo.id), newUpdates);
-        history.back();
+        await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
+        closeModal();
     } catch(e) {
         alert("저장 실패: " + e.message);
     }
@@ -110,37 +188,32 @@ async function saveSchedule() {
 
 async function deleteSchedule() {
     if(!confirm("이 일정을 삭제하시겠습니까?")) return;
-    
-    let updates = {};
-    if (state.currentEditingId) {
-        Object.keys(state.eventsCache).forEach(key => {
-            const data = state.eventsCache[key];
-            if (data && typeof data === 'string' && data.includes(state.currentEditingId)) {
-                updates[`events.${key}`] = deleteField();
-            }
-        });
-    } else {
-        const dateVal = document.getElementById('start-date').value;
-        const key = toKeyFormat(dateVal);
-        if(state.eventsCache[key]) {
-            updates[`events.${key}`] = deleteField();
-        }
-    }
+    if (!state.currentEditingId) return;
 
-    if(Object.keys(updates).length > 0) {
+    let finalUpdates = {};
+    Object.keys(state.eventsCache).forEach(key => {
+        let arr = getEventsArray(key);
+        if (arr.find(e => e.id === state.currentEditingId)) {
+            const newArr = arr.filter(e => e.id !== state.currentEditingId);
+            if (newArr.length === 0) finalUpdates[`events.${key}`] = deleteField();
+            else finalUpdates[`events.${key}`] = JSON.stringify(newArr);
+        }
+    });
+
+    if(Object.keys(finalUpdates).length > 0) {
         try {
-            await updateDoc(doc(db, "churches", state.churchInfo.id), updates);
-            history.back();
+            await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
+            closeModal();
         } catch(e) {
             alert("삭제 실패: " + e.message);
         }
     } else {
-        history.back();
+        closeModal();
     }
 }
 
 // ==========================================
-// [2] 화면 렌더링 및 UI
+// [3] 화면 렌더링
 // ==========================================
 
 function enterService(docId, name, isManager) {
@@ -157,12 +230,18 @@ function enterService(docId, name, isManager) {
             state.eventsCache = data.events || {}; 
             calculateYearlyData(state.currentYear, state);
             renderCalendar();
+            
+            if (document.getElementById('list-modal').style.display === 'flex') {
+                const dateKey = document.getElementById('list-modal').getAttribute('data-key');
+                if (dateKey) openListModal(dateKey); 
+            }
         }
     });
 
     initGestures();
 }
 
+// [핵심 수정] 달력 렌더링 (헤더 자동 생성 포함)
 function renderCalendar() {
     const existingOverlay = document.querySelector('.expanded-badge-card');
     if (existingOverlay) existingOverlay.remove();
@@ -172,67 +251,107 @@ function renderCalendar() {
     const monthDisplay = document.getElementById('current-month-year');
     const seasonDisplay = document.getElementById('liturgical-season');
     
-    const events = state.eventsCache; 
-
     document.getElementById('move-guide').onclick = exitMoveMode;
 
-    const oldDays = grid.querySelectorAll('.day');
-    oldDays.forEach(d => d.remove());
+    // [중요] 그리드 전체 초기화 (헤더가 없으면 다시 그리기 위해)
+    grid.innerHTML = ''; 
 
     monthDisplay.innerText = `${state.currentYear}년 ${state.currentMonth + 1}월`;
     updateLiturgicalBadge(seasonDisplay);
 
-    const firstDayOfWeek = new Date(state.currentYear, state.currentMonth, 1).getDay();
-    const lastDate = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
-    const totalCells = 42; 
+    // [1] 요일 헤더 생성 (강제 삽입 - 첫째 주 밀림 방지)
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    dayNames.forEach((name, index) => {
+        const header = document.createElement('div');
+        header.className = 'day-name';
+        if (index === 0) header.classList.add('sun');
+        header.innerText = name;
+        grid.appendChild(header);
+    });
 
-    for (let i = 0; i < firstDayOfWeek; i++) {
-        const emptyDay = document.createElement('div');
-        emptyDay.className = 'day';
-        emptyDay.style.backgroundColor = "#fcfcfc";
-        grid.appendChild(emptyDay);
+    // [2] 날짜 계산
+    const firstDayOfMonth = new Date(state.currentYear, state.currentMonth, 1);
+    const lastDayOfMonth = new Date(state.currentYear, state.currentMonth + 1, 0);
+    
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    const totalDays = lastDayOfMonth.getDate();
+    const prevMonthLastDate = new Date(state.currentYear, state.currentMonth, 0).getDate();
+
+    // [3] 이전 달 날짜
+    for (let i = 0; i < startDayOfWeek; i++) {
+        const dayNum = prevMonthLastDate - startDayOfWeek + i + 1;
+        let pm = state.currentMonth - 1;
+        let py = state.currentYear;
+        if (pm < 0) { pm = 11; py--; }
+        createDayCell(grid, py, pm, dayNum, true);
     }
 
-    for (let i = 1; i <= lastDate; i++) {
-        const dayEl = document.createElement('div');
-        dayEl.className = 'day';
-        
-        const dateStrForDrop = `${state.currentYear}-${String(state.currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-        dayEl.setAttribute('data-date', dateStrForDrop);
+    // [4] 이번 달 날짜
+    for (let i = 1; i <= totalDays; i++) {
+        createDayCell(grid, state.currentYear, state.currentMonth, i, false);
+    }
 
-        if (state.isAdmin) {
-            dayEl.ondragover = (e) => { e.preventDefault(); dayEl.classList.add('drag-over'); };
-            dayEl.ondragleave = () => { dayEl.classList.remove('drag-over'); };
-            dayEl.ondrop = (e) => {
-                e.preventDefault();
-                dayEl.classList.remove('drag-over');
-                const json = e.dataTransfer.getData('text/plain');
-                if (json) {
-                    const data = JSON.parse(json);
-                    moveEvent(data, dateStrForDrop);
-                }
-            };
-            dayEl.addEventListener('click', () => {
-                if (state.isMovingMode && state.movingEventData) {
-                    moveEvent(state.movingEventData, dateStrForDrop);
-                    exitMoveMode();
-                } else {
-                    openModal(state.currentYear, state.currentMonth + 1, i);
-                }
-            });
-        } else {
-             dayEl.onclick = () => openModal(state.currentYear, state.currentMonth + 1, i);
+    // [5] 다음 달 날짜
+    const filledCells = startDayOfWeek + totalDays;
+    const remainingCells = 42 - filledCells;
+    
+    for (let i = 1; i <= remainingCells; i++) {
+        let nm = state.currentMonth + 1;
+        let ny = state.currentYear;
+        if (nm > 11) { nm = 0; ny++; }
+        createDayCell(grid, ny, nm, i, true);
+    }
+}
+
+function createDayCell(grid, year, month, day, isOtherMonth) {
+    const dayEl = document.createElement('div');
+    dayEl.className = 'day';
+    if (isOtherMonth) dayEl.classList.add('other-month');
+
+    const dateKey = formatDateKey(year, month, day);
+    
+    dayEl.setAttribute('data-date', dateKey);
+
+    if (state.isAdmin) {
+        dayEl.ondragover = (e) => { e.preventDefault(); dayEl.classList.add('drag-over'); };
+        dayEl.ondragleave = () => { dayEl.classList.remove('drag-over'); };
+        dayEl.ondrop = (e) => {
+            e.preventDefault();
+            dayEl.classList.remove('drag-over');
+            const json = e.dataTransfer.getData('text/plain');
+            if (json) {
+                const data = JSON.parse(json);
+                moveEvent(data, dateKey);
+            }
+        };
+    }
+
+    dayEl.onclick = (e) => {
+        const existingOverlay = document.querySelector('.expanded-badge-card');
+        if (existingOverlay) existingOverlay.remove();
+
+        if (state.isMovingMode && state.movingEventData) {
+            moveEvent(state.movingEventData, dateKey);
+            exitMoveMode();
+            return;
         }
-        
-        const dateNum = document.createElement('span');
-        dateNum.className = 'date-num';
-        dateNum.innerText = i;
-        dayEl.appendChild(dateNum);
 
-        const currentDayOfWeek = new Date(state.currentYear, state.currentMonth, i).getDay();
-        const dateKey = `${state.currentYear}-${state.currentMonth+1}-${i}`;
-        const shortKey = `${state.currentMonth+1}-${i}`;
+        const dayEvents = getEventsArray(dateKey);
+        if (dayEvents.length > 0) {
+            openListModal(dateKey);
+        } else {
+            if (state.isAdmin) openModal(year, month + 1, day);
+        }
+    };
+    
+    const dateNum = document.createElement('span');
+    dateNum.className = 'date-num';
+    dateNum.innerText = day;
+    dayEl.appendChild(dateNum);
 
+    if (!isOtherMonth) {
+        const currentDayOfWeek = new Date(year, month, day).getDay();
+        const shortKey = `${month+1}-${day}`;
         let isRedDay = currentDayOfWeek === 0;
         const dayInfos = state.cachedHolidays[shortKey];
 
@@ -269,149 +388,190 @@ function renderCalendar() {
                 badgeContainer.appendChild(badge);
             });
         }
-
+        
         if (isRedDay) dayEl.classList.add('sun');
+        dayEl.appendChild(badgeContainer);
+    } else {
+        const badgeContainer = document.createElement('div');
+        badgeContainer.className = 'badge-container';
+        dayEl.appendChild(badgeContainer);
+    }
 
-        if (events[dateKey]) {
-            const rawData = events[dateKey];
+    const events = state.eventsCache;
+    if (events[dateKey]) { 
+        const dayEvents = getEventsArray(dateKey);
+        const container = dayEl.querySelector('.badge-container');
+        
+        dayEvents.forEach(data => {
             const eventBadge = document.createElement('div');
             eventBadge.className = 'badge';
             
-            let displayTitle = "";
-            let bgColor = "#4285F4";
-            
-            if (rawData.startsWith('{')) {
-                const data = JSON.parse(rawData);
-                displayTitle = data.title;
-                // [수정] 시간이 있으면 제목 뒤에 시간 표시 (제목 우선)
-                if(!data.isAllDay && data.startTime) {
-                    displayTitle = `${displayTitle} ${data.startTime}`;
-                }
-                bgColor = data.color || "#4285F4";
-                eventBadge.style.backgroundColor = bgColor;
-                eventBadge.style.color = "#fff";
-                
-                if (state.isMovingMode && state.movingEventData && state.movingEventData.id === data.id) {
-                    eventBadge.classList.add('moving-selected');
-                }
-
-                if (state.isAdmin) {
-                    eventBadge.setAttribute('draggable', 'true');
-                    eventBadge.ondragstart = (e) => {
-                        e.dataTransfer.setData('text/plain', JSON.stringify(data));
-                        eventBadge.classList.add('dragging');
-                    };
-                    eventBadge.ondragend = () => { eventBadge.classList.remove('dragging'); };
-                    eventBadge.addEventListener('touchstart', (e) => {
-                        state.longPressTimer = setTimeout(() => { enterMoveMode(data); }, 600); 
-                    }, {passive: true});
-                    eventBadge.addEventListener('touchend', () => {
-                        if (state.longPressTimer) clearTimeout(state.longPressTimer);
-                    }, {passive: true});
-                }
-            } else {
-                displayTitle = rawData;
-                eventBadge.classList.add('event-badge');
+            let displayTitle = data.title;
+            if(!data.isAllDay && data.startTime) {
+                displayTitle = `${displayTitle} ${data.startTime}`;
             }
             
+            eventBadge.style.backgroundColor = data.color || "#4285F4";
+            eventBadge.style.color = "#fff";
             eventBadge.innerText = displayTitle;
+            
+            if (state.isMovingMode && state.movingEventData && state.movingEventData.id === data.id) {
+                eventBadge.classList.add('moving-selected');
+            }
+
+            if (state.isAdmin) {
+                eventBadge.setAttribute('draggable', 'true');
+                eventBadge.ondragstart = (e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData('text/plain', JSON.stringify(data));
+                    eventBadge.classList.add('dragging');
+                };
+                eventBadge.ondragend = () => { eventBadge.classList.remove('dragging'); };
+                eventBadge.addEventListener('touchstart', (e) => {
+                    state.longPressTimer = setTimeout(() => { enterMoveMode(data); }, 600); 
+                }, {passive: true});
+                eventBadge.addEventListener('touchend', () => {
+                    if (state.longPressTimer) clearTimeout(state.longPressTimer);
+                }, {passive: true});
+            }
+
             eventBadge.onclick = (e) => {
-                if (state.isMovingMode) return; 
                 e.stopPropagation();
-                openModal(state.currentYear, state.currentMonth + 1, i);
+                if(state.isMovingMode) return;
+                openListModal(dateKey);
             };
-            badgeContainer.appendChild(eventBadge);
-        }
 
-        dayEl.appendChild(badgeContainer);
-
-        const today = new Date();
-        if (i === today.getDate() && state.currentMonth === today.getMonth() && state.currentYear === today.getFullYear()) {
-            dayEl.classList.add('today');
-        }
-        grid.appendChild(dayEl);
+            container.appendChild(eventBadge);
+        });
     }
 
-    const filledCells = firstDayOfWeek + lastDate;
-    for (let i = filledCells; i < totalCells; i++) {
-        const emptyDay = document.createElement('div');
-        emptyDay.className = 'day';
-        emptyDay.style.backgroundColor = "#fcfcfc";
-        grid.appendChild(emptyDay);
+    const today = new Date();
+    if (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) {
+        dayEl.classList.add('today');
     }
+    
+    grid.appendChild(dayEl);
 }
 
-// === Helpers ===
+// ==========================================
+// [4] 모달 로직
+// ==========================================
+
+function openListModal(dateKey) {
+    const modal = document.getElementById('list-modal');
+    const container = document.getElementById('event-list-container');
+    const title = document.getElementById('list-date-title');
+    
+    if (history.state?.modal !== 'list') {
+        history.pushState({ modal: 'list' }, null, '');
+    }
+
+    const [y, m, d] = dateKey.split('-').map(Number);
+    title.innerText = `${m}월 ${d}일 일정`;
+    modal.setAttribute('data-key', dateKey); 
+    
+    container.innerHTML = ""; 
+    
+    const dayEvents = getEventsArray(dateKey);
+
+    if (dayEvents.length === 0) {
+        container.innerHTML = `<div class="empty-list-msg">일정이 없습니다.</div>`;
+    } else {
+        dayEvents.forEach(evt => {
+            const item = document.createElement('div');
+            item.className = 'event-list-item';
+            
+            let timeStr = "하루 종일";
+            if (!evt.isAllDay && evt.startTime) {
+                timeStr = `${evt.startTime} ~ ${evt.endTime || ''}`;
+            }
+
+            item.innerHTML = `
+                <div class="event-color-dot" style="background-color: ${evt.color || '#4285F4'};"></div>
+                <div class="event-info">
+                    <span class="event-title">${evt.title}</span>
+                    <span class="event-time">${timeStr}</span>
+                </div>
+            `;
+            
+            item.onclick = () => {
+                history.pushState({ modal: 'edit' }, null, ''); 
+                openEditModal(evt);
+            };
+
+            container.appendChild(item);
+        });
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeListModal() {
+    history.back();
+}
+
+window.openAddModalFromList = function() {
+    const dateKey = document.getElementById('list-modal').getAttribute('data-key');
+    if(!dateKey) return;
+    const [y, m, d] = dateKey.split('-').map(Number);
+    history.pushState({ modal: 'add' }, null, '');
+    openModal(y, m, d);
+}
 
 function openModal(year, month, day) {
-    // [수정] 모달 열기 전 떠있는 플로팅 카드(절기 설명) 제거
-    const existingOverlay = document.querySelector('.expanded-badge-card');
-    if (existingOverlay) existingOverlay.remove();
-
     if(state.isMovingMode) return;
 
-    history.pushState({ modal: 'open' }, null, '');
-
-    const dateKey = `${year}-${month}-${day}`;
-    const rawData = state.eventsCache[dateKey];
-    
-    if (!state.isAdmin) {
-        if (rawData) {
-            let data = rawData.startsWith('{') ? JSON.parse(rawData) : { title: rawData, desc: '' };
-            let timeStr = "";
-            if(data.isAllDay) timeStr = "[종일]";
-            else if(data.startTime) timeStr = `${data.startTime} ~ ${data.endTime || ''}`;
-            
-            alert(`[일정 상세]\n\n제목: ${data.title}\n일시: ${data.startDate} ~ ${data.endDate}\n시간: ${timeStr}\n내용: ${data.desc}`);
-        }
-        history.back();
-        return;
+    if (!history.state || history.state.modal !== 'add') {
+         history.pushState({ modal: 'add' }, null, '');
     }
 
     const modal = document.getElementById('event-modal');
     modal.style.display = 'flex';
-    
-    state.currentEditingId = null;
-    const yyyy = year;
-    const mm = String(month).padStart(2, '0');
-    const dd = String(day).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
-    
-    document.getElementById('input-title').value = "";
-    document.getElementById('start-date').value = dateStr;
-    document.getElementById('end-date').value = dateStr;
-    document.getElementById('start-time').value = "09:00";
-    document.getElementById('end-time').value = "10:00";
-    document.getElementById('all-day-check').checked = true;
-    toggleTimeInputs();
-    document.getElementById('input-desc').value = "";
-    
-    document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected'));
-    document.querySelector('.color-option[data-color="#4285F4"]').classList.add('selected');
-    document.getElementById('selected-color').value = "#4285F4";
+    document.getElementById('modal-title').innerText = "일정 추가";
+    document.getElementById('btn-delete').style.display = 'none'; 
 
-    if (rawData) {
-        if (rawData.startsWith('{')) {
-            const data = JSON.parse(rawData);
-            state.currentEditingId = data.id || null;
-            document.getElementById('input-title').value = data.title;
-            document.getElementById('start-date').value = data.startDate;
-            document.getElementById('end-date').value = data.endDate;
-            document.getElementById('start-time').value = data.startTime || "";
-            document.getElementById('end-time').value = data.endTime || "";
-            document.getElementById('all-day-check').checked = data.isAllDay;
-            toggleTimeInputs();
-            document.getElementById('input-desc').value = data.desc;
-            const color = data.color || "#4285F4";
-            document.querySelectorAll('.color-option').forEach(o => {
-                o.classList.remove('selected');
-                if(o.getAttribute('data-color') === color) o.classList.add('selected');
-            });
-            document.getElementById('selected-color').value = color;
-        } else {
-            document.getElementById('input-title').value = rawData;
-        }
-    }
+    state.currentEditingId = null;
+    const dateStr = formatDateKey(year, month-1, day); 
+    
+    setModalValues(dateStr, dateStr, "", "", "", true, "#4285F4", "");
+}
+
+function openEditModal(evt) {
+    const modal = document.getElementById('event-modal');
+    modal.style.display = 'flex';
+    document.getElementById('modal-title').innerText = "일정 수정";
+    document.getElementById('btn-delete').style.display = 'block'; 
+
+    state.currentEditingId = evt.id;
+    
+    setModalValues(
+        evt.startDate, 
+        evt.endDate, 
+        evt.title, 
+        evt.startTime, 
+        evt.endTime, 
+        evt.isAllDay, 
+        evt.color, 
+        evt.desc
+    );
+}
+
+function setModalValues(sDate, eDate, title, sTime, eTime, allDay, color, desc) {
+    document.getElementById('input-title').value = title;
+    document.getElementById('start-date').value = sDate;
+    document.getElementById('end-date').value = eDate;
+    document.getElementById('start-time').value = sTime || "09:00";
+    document.getElementById('end-time').value = eTime || "10:00";
+    document.getElementById('all-day-check').checked = allDay;
+    toggleTimeInputs();
+    document.getElementById('input-desc').value = desc || "";
+    
+    const colorVal = color || "#4285F4";
+    document.querySelectorAll('.color-option').forEach(o => {
+        o.classList.remove('selected');
+        if(o.getAttribute('data-color') === colorVal) o.classList.add('selected');
+    });
+    document.getElementById('selected-color').value = colorVal;
 }
 
 function closeModal() {
@@ -452,18 +612,15 @@ async function shareMonth() {
     Object.keys(events).forEach(key => {
         const [y, m, d] = key.split('-').map(Number);
         if (y === state.currentYear && m === (state.currentMonth + 1)) {
-            let data = events[key];
-            if (data.startsWith('{')) {
-                data = JSON.parse(data);
+            const dayEvents = getEventsArray(key);
+            dayEvents.forEach(data => {
                 monthEvents.push({
                     day: d,
                     title: data.title,
                     time: data.isAllDay ? "종일" : (data.startTime || ""),
                     desc: data.desc || ""
                 });
-            } else {
-                monthEvents.push({ day: d, title: data, time: "", desc: "" });
-            }
+            });
         }
     });
 
@@ -600,12 +757,15 @@ function setupDateListeners() {
     });
 }
 
-// [중요] 모달/히스토리 이벤트 리스너 추가
 window.addEventListener('popstate', () => {
-    const modal = document.getElementById('event-modal');
-    // 뒤로가기 시 팝업 닫기
-    if (modal && modal.style.display === 'flex') {
-        modal.style.display = 'none';
+    const eventModal = document.getElementById('event-modal');
+    const listModal = document.getElementById('list-modal');
+    if (eventModal && eventModal.style.display === 'flex') {
+        eventModal.style.display = 'none';
+        return;
+    }
+    if (listModal && listModal.style.display === 'flex') {
+        listModal.style.display = 'none';
     }
 });
 
@@ -621,8 +781,10 @@ window.shareMonth = shareMonth;
 window.saveSchedule = saveSchedule;
 window.deleteSchedule = deleteSchedule;
 window.closeModal = closeModal;
+window.closeListModal = closeListModal;
 window.toggleTimeInputs = toggleTimeInputs;
 window.exitMoveMode = exitMoveMode;
+window.openAddModalFromList = openAddModalFromList;
 
 // Init
 checkAutoLogin();
