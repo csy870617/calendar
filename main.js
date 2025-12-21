@@ -35,23 +35,77 @@ function getEventsArray(dateKey) {
     else return [{ id: generateUUID(), title: rawData, isAllDay: true, color: "#4285F4" }];
 }
 
-// [Helper] 저장/삭제 후 달력으로 복귀 (모든 팝업 닫기)
 function closeAndReturnToCalendar() {
     const listModal = document.getElementById('list-modal');
     const eventModal = document.getElementById('event-modal');
-    
-    // 목록 팝업이 열려있는 상태에서 들어왔다면 (중첩 모달)
     if (listModal.style.display === 'flex') {
-        // 즉시 숨김 처리 (깜빡임 방지)
         eventModal.style.display = 'none';
         listModal.style.display = 'none';
-        // 히스토리 2단계 뒤로 (Event -> List -> Calendar)
         history.go(-2);
     } else {
-        // 단독 실행이었다면 1단계 뒤로
         history.back();
     }
 }
+
+// [수정] 시간 선택기 초기화 및 이벤트 리스너 추가
+function initTimeSelects() {
+    const hours = document.querySelectorAll('#start-hour, #end-hour');
+    const mins = document.querySelectorAll('#start-min, #end-min');
+    const ampms = document.querySelectorAll('#start-ampm, #end-ampm');
+
+    ampms.forEach(sel => {
+        sel.innerHTML = `<option value="AM">오전</option><option value="PM">오후</option>`;
+    });
+
+    let hOptions = "";
+    for(let i=1; i<=12; i++) hOptions += `<option value="${i}">${i}</option>`;
+    hours.forEach(sel => sel.innerHTML = hOptions);
+
+    let mOptions = "";
+    for(let i=0; i<60; i+=10) {
+        const val = String(i).padStart(2, '0');
+        mOptions += `<option value="${val}">${val}</option>`;
+    }
+    mins.forEach(sel => sel.innerHTML = mOptions);
+
+    // [New] 시작 시간이 '오후'로 바뀌면 종료 시간도 자동으로 '오후'로 변경
+    document.getElementById('start-ampm').addEventListener('change', function() {
+        if (this.value === 'PM') {
+            document.getElementById('end-ampm').value = 'PM';
+        }
+    });
+}
+
+function getTimeStringFromSelects(prefix) {
+    const ampm = document.getElementById(`${prefix}-ampm`).value;
+    let hour = parseInt(document.getElementById(`${prefix}-hour`).value);
+    const min = document.getElementById(`${prefix}-min`).value;
+
+    if (ampm === "PM" && hour < 12) hour += 12;
+    if (ampm === "AM" && hour === 12) hour = 0;
+
+    return `${String(hour).padStart(2, '0')}:${min}`;
+}
+
+function setSelectsFromTimeString(prefix, timeStr) {
+    if (!timeStr) timeStr = "09:00";
+    
+    let [h, m] = timeStr.split(':').map(Number);
+    
+    m = Math.floor(m / 10) * 10;
+
+    let ampm = "AM";
+    if (h >= 12) {
+        ampm = "PM";
+        if (h > 12) h -= 12;
+    }
+    if (h === 0) h = 12;
+
+    document.getElementById(`${prefix}-ampm`).value = ampm;
+    document.getElementById(`${prefix}-hour`).value = h;
+    document.getElementById(`${prefix}-min`).value = String(m).padStart(2, '0');
+}
+
 
 // ==========================================
 // [2] 일정 이동 및 저장 로직
@@ -83,10 +137,8 @@ async function moveEvent(eventData, newStartDateStr) {
         const key = formatDateKey(tempDate);
         let arr = getEventsArray(key);
         const newArr = arr.filter(e => e.id !== eventId);
-        
         if (newArr.length === 0) tempUpdates[key] = "DELETE";
         else tempUpdates[key] = JSON.stringify(newArr);
-        
         tempDate.setDate(tempDate.getDate() + 1);
     }
 
@@ -99,14 +151,12 @@ async function moveEvent(eventData, newStartDateStr) {
     while(loopDate <= finalEndObj) {
         const key = formatDateKey(loopDate);
         let currentArr = [];
-
         if (tempUpdates[key] !== undefined) {
             if (tempUpdates[key] === "DELETE") currentArr = [];
             else currentArr = JSON.parse(tempUpdates[key]);
         } else {
             currentArr = getEventsArray(key);
         }
-        
         currentArr.push(eventData);
         tempUpdates[key] = JSON.stringify(currentArr);
         loopDate.setDate(loopDate.getDate() + 1);
@@ -128,16 +178,25 @@ async function moveEvent(eventData, newStartDateStr) {
 async function saveSchedule() {
     const titleVal = document.getElementById('input-title').value;
     const startDateVal = document.getElementById('start-date').value;
-    let endDateVal = document.getElementById('end-date').value;
-    const startTimeVal = document.getElementById('start-time').value;
-    const endTimeVal = document.getElementById('end-time').value;
+    const endDateVal = document.getElementById('end-date').value;
+    
+    const startTimeVal = getTimeStringFromSelects('start');
+    const endTimeVal = getTimeStringFromSelects('end');
+    
     const isAllDay = document.getElementById('all-day-check').checked;
     const colorVal = document.getElementById('selected-color').value;
     const descVal = document.getElementById('input-desc').value;
 
     if (!titleVal) { alert("제목을 입력해주세요."); return; }
-    if (!endDateVal) endDateVal = startDateVal;
-    if (startDateVal > endDateVal) { alert("종료일이 시작일보다 빠를 수 없습니다."); return; }
+    if (!endDateVal) { alert("종료일을 입력해주세요."); return; }
+
+    const startDateTime = new Date(`${startDateVal}T${startTimeVal}`);
+    const endDateTime = new Date(`${endDateVal}T${endTimeVal}`);
+
+    if (endDateTime < startDateTime) {
+        alert("종료 일시가 시작 일시보다 빠를 수 없습니다.");
+        return;
+    }
 
     const newId = state.currentEditingId || generateUUID();
     const eventObj = {
@@ -193,7 +252,6 @@ async function saveSchedule() {
 
     try {
         await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
-        // [수정] 성공 시 달력 화면으로 완전 복귀
         closeAndReturnToCalendar();
     } catch(e) {
         alert("저장 실패: " + e.message);
@@ -217,7 +275,6 @@ async function deleteSchedule() {
     if(Object.keys(finalUpdates).length > 0) {
         try {
             await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
-            // [수정] 성공 시 달력 화면으로 완전 복귀
             closeAndReturnToCalendar();
         } catch(e) {
             alert("삭제 실패: " + e.message);
@@ -416,7 +473,11 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
             
             let displayTitle = data.title;
             if(!data.isAllDay && data.startTime) {
-                displayTitle = `${displayTitle} ${data.startTime}`;
+                let [h, m] = data.startTime.split(':').map(Number);
+                let ampm = h >= 12 ? '오후' : '오전';
+                if (h > 12) h -= 12;
+                if (h === 0) h = 12;
+                displayTitle = `${displayTitle} ${ampm} ${h}:${String(m).padStart(2,'0')}`;
             }
             
             eventBadge.style.backgroundColor = data.color || "#4285F4";
@@ -491,7 +552,19 @@ function openListModal(dateKey) {
             
             let timeStr = "하루 종일";
             if (!evt.isAllDay && evt.startTime) {
-                timeStr = `${evt.startTime} ~ ${evt.endTime || ''}`;
+                let [h, min] = evt.startTime.split(':').map(Number);
+                let ampm = h >= 12 ? '오후' : '오전';
+                if (h > 12) h -= 12;
+                if (h === 0) h = 12;
+                
+                timeStr = `${ampm} ${h}:${String(min).padStart(2,'0')}`;
+                if (evt.endTime) {
+                    let [eh, emin] = evt.endTime.split(':').map(Number);
+                    let eampm = eh >= 12 ? '오후' : '오전';
+                    if (eh > 12) eh -= 12;
+                    if (eh === 0) eh = 12;
+                    timeStr += ` ~ ${eampm} ${eh}:${String(emin).padStart(2,'0')}`;
+                }
             }
 
             item.innerHTML = `
@@ -568,8 +641,10 @@ function setModalValues(sDate, eDate, title, sTime, eTime, allDay, color, desc) 
     document.getElementById('input-title').value = title;
     document.getElementById('start-date').value = sDate;
     document.getElementById('end-date').value = eDate;
-    document.getElementById('start-time').value = sTime || "09:00";
-    document.getElementById('end-time').value = eTime || "10:00";
+    
+    setSelectsFromTimeString('start', sTime);
+    setSelectsFromTimeString('end', eTime);
+
     document.getElementById('all-day-check').checked = allDay;
     toggleTimeInputs();
     document.getElementById('input-desc').value = desc || "";
@@ -588,14 +663,16 @@ function closeModal() {
 
 function toggleTimeInputs() {
     const isAllDay = document.getElementById('all-day-check').checked;
-    document.getElementById('start-time').disabled = isAllDay;
-    document.getElementById('end-time').disabled = isAllDay;
+    
+    const startGroup = document.getElementById('start-time-group');
+    const endGroup = document.getElementById('end-time-group');
+    
     if(isAllDay) {
-        document.getElementById('start-time').style.opacity = "0.3";
-        document.getElementById('end-time').style.opacity = "0.3";
+        startGroup.classList.add('disabled-time');
+        endGroup.classList.add('disabled-time');
     } else {
-        document.getElementById('start-time').style.opacity = "1";
-        document.getElementById('end-time').style.opacity = "1";
+        startGroup.classList.remove('disabled-time');
+        endGroup.classList.remove('disabled-time');
     }
 }
 
@@ -798,3 +875,4 @@ window.openAddModalFromList = openAddModalFromList;
 checkAutoLogin();
 setupColorPalette();
 setupDateListeners();
+initTimeSelects(); // [New]

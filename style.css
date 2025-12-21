@@ -23,6 +23,7 @@ body {
     margin: 0; padding: 0;
     background-color: var(--bg-body);
     color: var(--text-main);
+    /* 모바일 브라우저 주소창 대응 */
     height: 100vh; 
     height: 100dvh; 
     overflow: hidden;
@@ -57,9 +58,15 @@ input {
 }
 input:focus { outline: none; border-color: var(--primary); border-width: 2px; margin-bottom: 9px; }
 
+/* 체크박스 그룹 */
 .checkbox-group { 
-    width: 100%; display: flex; justify-content: space-between; align-items: center; 
-    margin-bottom: 5px; font-size: 0.9rem; padding: 0 2px; 
+    width: 100%; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 5px; 
+    font-size: 0.9rem;
+    padding: 0 2px; 
 }
 .check-left { display: flex; gap: 15px; }
 
@@ -151,13 +158,11 @@ button:hover { background-color: #3367d6; }
     background: transparent; color: var(--text-main); border: 1px solid var(--border); 
     border-radius: 6px; display: flex; justify-content: center; align-items: center; 
     font-size: 1rem; cursor: pointer; 
-    /* 모바일 터치 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
 }
-
-/* [수정] 누를 때만 색 변경, 떼면 원래대로 */
 .nav-btn:active { background: #f1f3f4; transform: scale(0.95); }
 .nav-btn:focus { outline: none; background: transparent; } /* 포커스 시 색상 유지 방지 */
+
 #current-month-year { font-size: 1.1rem; font-weight: 600; }
 
 .move-guide {
@@ -166,20 +171,15 @@ button:hover { background-color: #3367d6; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; }}
 
-/* [핵심] 달력 그리드 */
+/* [핵심] 달력 그리드 레이아웃 */
 .calendar-grid {
-    /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 
-       -> 내용물 크기 무시하고 무조건 부모의 남은 공간을 100% 차지함 */
-    flex: 1 1 0; 
-    
+    flex: 1 1 0; /* 남은 높이 100% 강제 차지 */
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    /* 요일(28px) + 나머지 6주(1fr) 균등 분할 */
-    grid-template-rows: 28px repeat(6, 1fr);
-    
+    grid-template-rows: 28px repeat(6, 1fr); /* 요일 헤더 + 6주 균등 분할 */
     border-top: 1px solid var(--border); 
     overflow: hidden; 
-    min-height: 0; /* Flexbox 내부 스크롤/크기 버그 방지 */
+    min-height: 0; 
 }
 
 .day-name {
@@ -242,7 +242,7 @@ button:hover { background-color: #3367d6; }
 
 
 /* =========================================
-   3. 모달 (팝업)
+   3. 모달 (팝업) 및 입력 폼
    ========================================= */
 .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -253,8 +253,7 @@ button:hover { background-color: #3367d6; }
 
 /* 목록 모달 */
 #list-modal { z-index: 1500; }
-
-/* 입력/수정 모달 (목록보다 위에) */
+/* 입력 모달 (최상위) */
 #event-modal { z-index: 2000; }
 
 .modal-box {
@@ -272,8 +271,7 @@ button:hover { background-color: #3367d6; }
 
 .modal-body input[type="text"], 
 .modal-body textarea, 
-.modal-body input[type="date"], 
-.modal-body input[type="time"] {
+.modal-body input[type="date"] {
     width: 100%; padding: 12px;
     border: 1px solid var(--border); border-radius: 8px;
     font-size: 16px; 
@@ -281,32 +279,72 @@ button:hover { background-color: #3367d6; }
 }
 .modal-body textarea { resize: none; min-height: 80px; }
 
-.date-range-group { display: flex; flex-direction: column; gap: 10px; background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
-.date-range-group .row { display: flex; align-items: center; gap: 10px; }
-.date-range-group label { width: 35px; margin-bottom: 0; font-size: 0.9rem; }
-.date-range-group input { background: white; margin-bottom: 0; padding: 8px; font-size: 0.9rem; }
-
-/* [수정] 7개씩 2줄 그리드 레이아웃 적용 */
-.color-palette { 
-    display: grid;
-    grid-template-columns: repeat(7, 1fr); /* 7개의 균등한 열 */
-    gap: 10px; /* 색상 사이 간격 */
-    margin-top: 10px;
-    justify-items: center; /* 격자 내 중앙 정렬 */
+/* [수정] 날짜/시간 입력 그룹 - 강제 한 줄 배치 */
+.date-range-group { 
+    display: flex; flex-direction: column; gap: 8px; 
+    background: #f8f9fa; padding: 10px 8px; /* 패딩을 조금 줄임 */
+    border-radius: 8px; border: 1px solid var(--border); 
 }
 
+.date-range-group .row { 
+    display: flex; align-items: center; gap: 5px; /* 간격 축소 */
+    flex-wrap: nowrap; /* [중요] 줄바꿈 금지 (무조건 한 줄) */
+    width: 100%;
+}
+
+.date-range-group label { 
+    width: 30px; /* 라벨 너비 축소 */
+    margin-bottom: 0; font-size: 0.85rem; font-weight: 600; 
+    flex-shrink: 0; 
+    white-space: nowrap;
+}
+
+.date-range-group input { 
+    background: white; margin-bottom: 0; padding: 8px 4px; /* 패딩 축소 */
+    font-size: 0.9rem; /* 폰트 조금 축소 */
+    flex: 1; /* 남은 공간을 날짜창이 차지 */
+    min-width: 0; /* 강제 축소 허용 */
+    border: 1px solid var(--border); border-radius: 6px;
+    letter-spacing: -0.5px; /* 자간을 좁혀서 내용 확보 */
+}
+
+/* 시간 선택기 그룹 (최소한의 너비만 차지) */
+.time-select-group {
+    display: flex; align-items: center; gap: 2px;
+    flex-shrink: 0; /* 시간 선택기는 줄어들지 않음 */
+    width: auto;
+}
+
+/* 시간 선택 박스 디자인 최적화 */
+.time-select {
+    padding: 8px 0; /* 좌우 패딩 제거 */
+    border: 1px solid var(--border); border-radius: 6px;
+    background: #fff; font-size: 0.85rem; text-align: center;
+    cursor: pointer; height: 36px;
+    /* 모바일 기본 화살표 제거해서 공간 확보 */
+    -webkit-appearance: none; appearance: none;
+}
+
+/* 너비 강제 고정 (타이트하게) */
+#start-ampm, #end-ampm { width: 40px; background-color: #f1f3f4; font-weight: 600; }
+#start-hour, #end-hour, #start-min, #end-min { width: 32px; }
+
+.time-colon { font-weight: bold; color: var(--text-sub); margin: 0 1px; }
+.disabled-time { opacity: 0.3; pointer-events: none; }
+
+
+/* 색상 팔레트 (7x2 그리드) */
+.color-palette { 
+    display: grid; grid-template-columns: repeat(7, 1fr); 
+    gap: 10px; margin-top: 10px; justify-items: center; 
+}
 .color-option {
     width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
-    border: 2px solid transparent; transition: 0.2s;
-    /* 선택 시 테두리가 안쪽으로 생겨 크기 변화 방지 */
-    box-sizing: border-box; 
+    border: 2px solid transparent; transition: 0.2s; box-sizing: border-box; 
 }
 .color-option:hover { transform: scale(1.1); }
-/* 선택된 상태: 흰색 테두리와 그림자로 강조 */
 .color-option.selected { 
-    border-color: #fff; 
-    box-shadow: 0 0 0 2px #333; /* 이중 테두리 효과 */
-    transform: scale(1.1); 
+    border-color: #fff; box-shadow: 0 0 0 2px #333; transform: scale(1.1); 
 }
 
 .modal-footer { margin-top: 24px; display: flex; justify-content: space-between; align-items: center; }
@@ -319,10 +357,8 @@ button:hover { background-color: #3367d6; }
 
 /* 일정 목록 */
 .event-list-container {
-    max-height: 300px;
-    overflow-y: auto;
-    display: flex; flex-direction: column; gap: 8px;
-    margin-bottom: 10px;
+    max-height: 300px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;
 }
 .event-list-item {
     display: flex; align-items: center; padding: 12px;
@@ -340,8 +376,7 @@ button:hover { background-color: #3367d6; }
 
 .expanded-badge-card {
     position: fixed; z-index: 3000;
-    width: auto; max-width: 280px;
-    padding: 10px 14px; border-radius: 8px;
+    width: auto; max-width: 280px; padding: 10px 14px; border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.25);
     font-size: 0.9rem; font-weight: 500;
     white-space: normal; line-height: 1.4;
@@ -350,6 +385,7 @@ button:hover { background-color: #3367d6; }
 
 .badge-container::-webkit-scrollbar { display: none; }
 
+/* --- 미디어 쿼리 --- */
 @media (max-width: 768px) {
     .header { padding: 10px 12px; }
     .church-title { font-size: 1.1rem; }
@@ -357,10 +393,8 @@ button:hover { background-color: #3367d6; }
     .icon-btn { width: 32px; height: 32px; }
     .nav-btn { width: 36px; height: 36px; } 
     
-    /* [정답 수정] 1fr -> minmax(0, 1fr)로 변경하여 강제 균등 분배 */
-    .calendar-grid { 
-        grid-template-rows: 24px repeat(6, minmax(0, 1fr)); 
-    }
+    /* 모바일에서도 그리드 균등 분할 유지 */
+    .calendar-grid { grid-template-rows: 24px repeat(6, 1fr); }
     
     .day span.date-num { width: 20px; height: 20px; line-height: 20px; font-size: 0.75rem; }
     .badge { font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; margin-bottom: 1px; }

@@ -89,15 +89,28 @@
                     <div class="row">
                         <label>시작</label>
                         <input type="date" id="start-date">
-                        <input type="time" id="start-time">
+                        
+                        <div class="time-select-group" id="start-time-group">
+                            <select id="start-ampm" class="time-select"></select>
+                            <select id="start-hour" class="time-select"></select>
+                            <span class="time-colon">:</span>
+                            <select id="start-min" class="time-select"></select>
+                        </div>
                     </div>
+
                     <div class="row">
                         <label>종료</label>
                         <input type="date" id="end-date">
-                        <input type="time" id="end-time">
+                        
+                        <div class="time-select-group" id="end-time-group">
+                            <select id="end-ampm" class="time-select"></select>
+                            <select id="end-hour" class="time-select"></select>
+                            <span class="time-colon">:</span>
+                            <select id="end-min" class="time-select"></select>
+                        </div>
                     </div>
                 </div>
-
+                
                 <label class="custom-checkbox" style="margin-top:5px;">
                     <input type="checkbox" id="all-day-check" onchange="toggleTimeInputs()">
                     <span class="checkmark"></span> 하루 종일 (All Day)
