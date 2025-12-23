@@ -409,3 +409,13 @@ button:hover { background-color: #3367d6; }
     #current-month-year { font-size: 1rem; }
     .badge { font-size: 0.6rem; }
 }
+
+/* [추가] 초대 안내 문구 스타일 */
+.invite-hint {
+    font-size: 0.8rem;
+    color: var(--text-sub);
+    text-align: center;
+    margin-top: 8px;
+    margin-bottom: 15px;
+    word-break: keep-all;
+}
