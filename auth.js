@@ -1,5 +1,5 @@
 import { db, auth, signInAnonymously } from './firebase.js';
-import { collection, query, where, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, query, where, getDocs, addDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { state } from './store.js';
 
 // SHA-256 해시 (브라우저 SubtleCrypto)
@@ -9,6 +9,11 @@ async function hashPassword(password) {
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 저장된 비밀번호가 이미 해싱된 형식인지 판별 (64 hex = SHA-256)
+function isHashedPassword(pw) {
+    return typeof pw === 'string' && /^[0-9a-f]{64}$/.test(pw);
 }
 
 // localStorage 안전 파싱
@@ -34,35 +39,57 @@ async function authenticateAndQuery(callback) {
     }
 }
 
-// 로그인 수행 (해시된 비밀번호 사용)
-async function performLogin(name, hashedPw, saveOptions) {
+// 로그인 수행 (해시된 비밀번호 우선, 실패 시 원문으로 레거시 매칭 후 해시로 자동 업그레이드)
+async function performLogin(name, hashedPw, saveOptions, rawPw) {
     const errorMsg = document.getElementById('error-msg');
 
     await authenticateAndQuery(async () => {
         const churchesRef = collection(db, "churches");
-        const q = query(churchesRef, where("name", "==", name), where("password", "==", hashedPw));
 
         try {
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const docSnap = querySnapshot.docs[0];
+            // 1차: 해시된 비밀번호로 조회
+            let q = query(churchesRef, where("name", "==", name), where("password", "==", hashedPw));
+            let snapshot = await getDocs(q);
+            let matchedDoc = snapshot.empty ? null : snapshot.docs[0];
+            let needsMigration = false;
 
-                if (saveOptions) {
-                    const authData = {
-                        name,
-                        pw: hashedPw,
-                        autoLogin: saveOptions.autoLogin,
-                        remember: saveOptions.remember
-                    };
-                    localStorage.setItem('churchAuthData', JSON.stringify(authData));
-                } else {
-                    localStorage.removeItem('churchAuthData');
+            // 2차: 레거시 평문 비밀번호 폴백 (rawPw 제공 시)
+            if (!matchedDoc && rawPw) {
+                q = query(churchesRef, where("name", "==", name), where("password", "==", rawPw));
+                snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    matchedDoc = snapshot.docs[0];
+                    needsMigration = true;
                 }
-
-                window.enterService(docSnap.id, name, true);
-            } else {
-                errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
             }
+
+            if (!matchedDoc) {
+                errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
+                return;
+            }
+
+            // 레거시 평문 비밀번호를 해시로 업그레이드 (실패해도 로그인은 진행)
+            if (needsMigration) {
+                try {
+                    await updateDoc(doc(db, "churches", matchedDoc.id), { password: hashedPw });
+                } catch (migErr) {
+                    console.warn("Password hash migration failed:", migErr);
+                }
+            }
+
+            if (saveOptions) {
+                const authData = {
+                    name,
+                    pw: hashedPw,
+                    autoLogin: saveOptions.autoLogin,
+                    remember: saveOptions.remember
+                };
+                localStorage.setItem('churchAuthData', JSON.stringify(authData));
+            } else {
+                localStorage.removeItem('churchAuthData');
+            }
+
+            window.enterService(matchedDoc.id, name, true);
         } catch (e) {
             console.error("Error:", e);
             errorMsg.innerText = "서버 연결 오류.";
@@ -116,7 +143,8 @@ export async function handleAuthAction() {
         const saveOptions = (rememberCheck.checked || autoLoginCheck.checked)
             ? { autoLogin: autoLoginCheck.checked, remember: rememberCheck.checked }
             : null;
-        await performLogin(name, hashedPw, saveOptions);
+        // 사용자 원문 입력을 같이 넘겨 레거시(평문 저장) 그룹도 로그인 후 자동 해시 업그레이드
+        await performLogin(name, hashedPw, saveOptions, pw);
     }
 }
 
@@ -156,7 +184,7 @@ export function logout() {
     location.reload();
 }
 
-export function checkAutoLogin() {
+export async function checkAutoLogin() {
     const savedAuth = getSavedAuth();
     if (!savedAuth) return;
 
@@ -168,9 +196,16 @@ export function checkAutoLogin() {
 
     if (savedAuth.autoLogin && savedAuth.pw) {
         document.getElementById('auto-login-check').checked = true;
-        // 저장된 해시를 그대로 사용 (재해시 방지)
         const saveOptions = { autoLogin: true, remember: !!savedAuth.remember };
-        performLogin(savedAuth.name, savedAuth.pw, saveOptions);
+
+        if (isHashedPassword(savedAuth.pw)) {
+            // 이미 해시 형식: 그대로 사용
+            performLogin(savedAuth.name, savedAuth.pw, saveOptions);
+        } else {
+            // 레거시 localStorage 평문: 해싱 후 로그인, 원문은 DB 폴백/업그레이드용으로 전달
+            const hashedPw = await hashPassword(savedAuth.pw);
+            performLogin(savedAuth.name, hashedPw, saveOptions, savedAuth.pw);
+        }
     }
 }
 

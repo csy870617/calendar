@@ -55,9 +55,10 @@ function getNextDayOfWeek(date, dayOfWeek) {
 
 export function calculateYearlyData(year, state) {
     if (state.cachedYear === year) return;
-    const holidays = {}; 
+    const holidays = {};
     const addDate = (m, d, name, type, color, isHoliday = false) => {
-        const key = `${m}-${d}`;
+        // 연도를 키에 포함하여 인접 연도 셀과의 충돌 방지
+        const key = `${year}-${m}-${d}`;
         if (!holidays[key]) holidays[key] = [];
         holidays[key].push({ name, type, color, isHoliday });
     };

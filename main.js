@@ -420,7 +420,7 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
 
     if (!isOtherMonth) {
         const currentDayOfWeek = new Date(year, month, day).getDay();
-        const shortKey = `${month+1}-${day}`;
+        const shortKey = `${year}-${month+1}-${day}`;
         let isRedDay = currentDayOfWeek === 0;
         const dayInfos = state.cachedHolidays[shortKey];
 
