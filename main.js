@@ -27,6 +27,10 @@ function parseDateStr(dateStr) {
     return new Date(y, m - 1, d);
 }
 
+function sanitizeColor(color) {
+    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(color) ? color : '#4285F4';
+}
+
 function getEventsArray(dateKey) {
     const rawData = state.eventsCache[dateKey];
     if (!rawData) return [];
@@ -116,8 +120,8 @@ async function moveEvent(eventData, newStartDateStr) {
     const oldEnd = parseDateStr(eventData.endDate);
     const newStart = parseDateStr(newStartDateStr);
     
-    const diffTime = Math.abs(oldEnd - oldStart);
-    const durationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffTime = oldEnd - oldStart;
+    const durationDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     
     const newEnd = new Date(newStart);
     newEnd.setDate(newEnd.getDate() + durationDays);
@@ -480,7 +484,7 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
                 displayTitle = `${displayTitle} ${ampm} ${h}:${String(m).padStart(2,'0')}`;
             }
             
-            eventBadge.style.backgroundColor = data.color || "#4285F4";
+            eventBadge.style.backgroundColor = sanitizeColor(data.color);
             eventBadge.style.color = "#fff";
             eventBadge.innerText = displayTitle;
             
@@ -567,14 +571,26 @@ function openListModal(dateKey) {
                 }
             }
 
-            item.innerHTML = `
-                <div class="event-color-dot" style="background-color: ${evt.color || '#4285F4'};"></div>
-                <div class="event-info">
-                    <span class="event-title">${evt.title}</span>
-                    <span class="event-time">${timeStr}</span>
-                </div>
-            `;
-            
+            const dot = document.createElement('div');
+            dot.className = 'event-color-dot';
+            dot.style.backgroundColor = sanitizeColor(evt.color);
+
+            const info = document.createElement('div');
+            info.className = 'event-info';
+
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'event-title';
+            titleSpan.textContent = evt.title;
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'event-time';
+            timeSpan.textContent = timeStr;
+
+            info.appendChild(titleSpan);
+            info.appendChild(timeSpan);
+            item.appendChild(dot);
+            item.appendChild(info);
+
             item.onclick = () => {
                 history.pushState({ modal: 'edit' }, null, ''); 
                 openEditModal(evt);

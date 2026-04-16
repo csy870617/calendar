@@ -13,5 +13,7 @@ export const state = {
     movingEventData: null,
     isMovingMode: false,
     currentEditingId: null,
-    longPressTimer: null
+    longPressTimer: null,
+    touchStartX: 0,
+    touchEndX: 0
 };

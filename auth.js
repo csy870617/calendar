@@ -2,7 +2,26 @@ import { db, auth, signInAnonymously } from './firebase.js';
 import { collection, query, where, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { state } from './store.js';
 
-// 공통 로그인 처리 함수
+// SHA-256 해시 (브라우저 SubtleCrypto)
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// localStorage 안전 파싱
+function getSavedAuth() {
+    try {
+        return JSON.parse(localStorage.getItem('churchAuthData'));
+    } catch {
+        localStorage.removeItem('churchAuthData');
+        return null;
+    }
+}
+
+// 공통 익명 인증 래퍼
 async function authenticateAndQuery(callback) {
     try {
         if (!auth.currentUser) {
@@ -15,62 +34,90 @@ async function authenticateAndQuery(callback) {
     }
 }
 
-export async function handleAuthAction() {
-    const name = document.getElementById('church-name').value.trim();
-    const pw = document.getElementById('church-pw').value.trim();
+// 로그인 수행 (해시된 비밀번호 사용)
+async function performLogin(name, hashedPw, saveOptions) {
     const errorMsg = document.getElementById('error-msg');
-    
-    const rememberCheck = document.getElementById('remember-check');
-    const autoLoginCheck = document.getElementById('auto-login-check');
-
-    if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
 
     await authenticateAndQuery(async () => {
         const churchesRef = collection(db, "churches");
-        const q = query(churchesRef, where("name", "==", name), where("password", "==", pw));
+        const q = query(churchesRef, where("name", "==", name), where("password", "==", hashedPw));
 
         try {
             const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                const docSnap = querySnapshot.docs[0];
 
-            if (state.isRegisterMode) {
-                if (!querySnapshot.empty) {
-                    errorMsg.innerHTML = "이미 등록된 아이디입니다.<br>다른 이름이나 비밀번호를 사용해주세요.";
+                if (saveOptions) {
+                    const authData = {
+                        name,
+                        pw: hashedPw,
+                        autoLogin: saveOptions.autoLogin,
+                        remember: saveOptions.remember
+                    };
+                    localStorage.setItem('churchAuthData', JSON.stringify(authData));
                 } else {
-                    const newDocRef = await addDoc(churchesRef, {
-                        name: name,
-                        password: pw,
-                        events: {}
-                    });
-                    alert("새로운 그룹이 생성되었습니다!");
-                    window.enterService(newDocRef.id, name, true);
+                    localStorage.removeItem('churchAuthData');
                 }
+
+                window.enterService(docSnap.id, name, true);
             } else {
-                if (!querySnapshot.empty) {
-                    const docSnap = querySnapshot.docs[0];
-                    
-                    // [수정] 저장 또는 자동 로그인 체크 시 데이터 저장
-                    if (rememberCheck.checked || autoLoginCheck.checked) {
-                        const authData = { 
-                            name, 
-                            pw, 
-                            autoLogin: autoLoginCheck.checked,
-                            remember: rememberCheck.checked
-                        };
-                        localStorage.setItem('churchAuthData', JSON.stringify(authData));
-                    } else {
-                        localStorage.removeItem('churchAuthData');
-                    }
-                    
-                    window.enterService(docSnap.id, name, true);
-                } else {
-                    errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
-                }
+                errorMsg.innerText = "그룹 정보가 올바르지 않습니다. (이름 또는 비밀번호 확인)";
             }
         } catch (e) {
             console.error("Error:", e);
             errorMsg.innerText = "서버 연결 오류.";
         }
     });
+}
+
+// 그룹 등록 수행 (이름 중복 검사)
+async function performRegister(name, hashedPw) {
+    const errorMsg = document.getElementById('error-msg');
+
+    await authenticateAndQuery(async () => {
+        const churchesRef = collection(db, "churches");
+        const nameQuery = query(churchesRef, where("name", "==", name));
+
+        try {
+            const querySnapshot = await getDocs(nameQuery);
+            if (!querySnapshot.empty) {
+                errorMsg.innerText = "이미 등록된 그룹 이름입니다. 다른 이름을 사용해주세요.";
+            } else {
+                const newDocRef = await addDoc(churchesRef, {
+                    name: name,
+                    password: hashedPw,
+                    events: {}
+                });
+                alert("새로운 그룹이 생성되었습니다!");
+                window.enterService(newDocRef.id, name, true);
+            }
+        } catch (e) {
+            console.error("Error:", e);
+            errorMsg.innerText = "서버 연결 오류.";
+        }
+    });
+}
+
+export async function handleAuthAction() {
+    const name = document.getElementById('church-name').value.trim();
+    const pw = document.getElementById('church-pw').value.trim();
+    const errorMsg = document.getElementById('error-msg');
+
+    const rememberCheck = document.getElementById('remember-check');
+    const autoLoginCheck = document.getElementById('auto-login-check');
+
+    if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
+
+    const hashedPw = await hashPassword(pw);
+
+    if (state.isRegisterMode) {
+        await performRegister(name, hashedPw);
+    } else {
+        const saveOptions = (rememberCheck.checked || autoLoginCheck.checked)
+            ? { autoLogin: autoLoginCheck.checked, remember: rememberCheck.checked }
+            : null;
+        await performLogin(name, hashedPw, saveOptions);
+    }
 }
 
 export async function handleGuestLogin() {
@@ -85,9 +132,11 @@ export async function handleGuestLogin() {
 
         try {
             const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
+            if (querySnapshot.size === 1) {
                 const docSnap = querySnapshot.docs[0];
                 window.enterService(docSnap.id, name, false);
+            } else if (querySnapshot.size > 1) {
+                errorMsg.innerText = "동일한 이름의 그룹이 여러 개 있습니다. 비밀번호로 로그인해주세요.";
             } else {
                 errorMsg.innerText = "존재하지 않는 교회입니다.";
             }
@@ -98,7 +147,7 @@ export async function handleGuestLogin() {
 }
 
 export function logout() {
-    const savedAuth = JSON.parse(localStorage.getItem('churchAuthData'));
+    const savedAuth = getSavedAuth();
     if (savedAuth) {
         // 로그아웃 시 자동 로그인만 해제 (저장은 유지될 수 있음)
         savedAuth.autoLogin = false;
@@ -108,19 +157,20 @@ export function logout() {
 }
 
 export function checkAutoLogin() {
-    const savedAuth = JSON.parse(localStorage.getItem('churchAuthData'));
-    if (savedAuth) {
-        document.getElementById('church-name').value = savedAuth.name || "";
-        document.getElementById('church-pw').value = savedAuth.pw || "";
-        
-        if (savedAuth.remember) {
-            document.getElementById('remember-check').checked = true;
-        }
-        
-        if (savedAuth.autoLogin) {
-            document.getElementById('auto-login-check').checked = true;
-            handleAuthAction();
-        }
+    const savedAuth = getSavedAuth();
+    if (!savedAuth) return;
+
+    document.getElementById('church-name').value = savedAuth.name || "";
+
+    if (savedAuth.remember) {
+        document.getElementById('remember-check').checked = true;
+    }
+
+    if (savedAuth.autoLogin && savedAuth.pw) {
+        document.getElementById('auto-login-check').checked = true;
+        // 저장된 해시를 그대로 사용 (재해시 방지)
+        const saveOptions = { autoLogin: true, remember: !!savedAuth.remember };
+        performLogin(savedAuth.name, savedAuth.pw, saveOptions);
     }
 }
 
@@ -131,12 +181,12 @@ export function toggleMode() {
     const btn = document.getElementById('action-btn');
     const toggleBtn = document.getElementById('toggle-btn');
     const errorMsg = document.getElementById('error-msg');
-    
+
     const guestBtn = document.querySelector('.btn-text');
     if (guestBtn) guestBtn.style.display = state.isRegisterMode ? 'none' : 'block';
-    
+
     document.querySelector('.checkbox-group').style.display = state.isRegisterMode ? 'none' : 'flex';
-    
+
     const inviteBtn = document.querySelector('.btn-row .btn-outline');
     if(inviteBtn) inviteBtn.style.display = state.isRegisterMode ? 'none' : 'block';
 
