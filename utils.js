@@ -18,8 +18,12 @@ export function toKeyFormat(dateStr) {
 }
 
 export function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
 }
@@ -51,9 +55,10 @@ function getNextDayOfWeek(date, dayOfWeek) {
 
 export function calculateYearlyData(year, state) {
     if (state.cachedYear === year) return;
-    const holidays = {}; 
+    const holidays = {};
     const addDate = (m, d, name, type, color, isHoliday = false) => {
-        const key = `${m}-${d}`;
+        // 연도를 키에 포함하여 인접 연도 셀과의 충돌 방지
+        const key = `${year}-${m}-${d}`;
         if (!holidays[key]) holidays[key] = [];
         holidays[key].push({ name, type, color, isHoliday });
     };

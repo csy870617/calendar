@@ -42,7 +42,7 @@
             <p class="invite-hint">초대 후 그룹명과 비밀번호를 함께 공유하세요.</p>
             
             <div class="toggle-link">
-                <a href="#" onclick="toggleMode()" id="toggle-btn">새 그룹 만들기</a>
+                <a href="#" onclick="event.preventDefault(); toggleMode();" id="toggle-btn">새 그룹 만들기</a>
             </div>
                 </div>
 
@@ -81,7 +81,7 @@
         </div>
     </div>
 
-    <div id="event-modal" class="modal-overlay">
+    <div id="event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-box">
             <h3 id="modal-title">일정 추가</h3>
             <div class="modal-body">
@@ -151,7 +151,7 @@
         </div>
     </div>
 
-    <div id="list-modal" class="modal-overlay">
+    <div id="list-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="list-date-title">
         <div class="modal-box">
             <h3 id="list-date-title">0월 0일 일정</h3>
             <div id="event-list-container" class="event-list-container">
