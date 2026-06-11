@@ -2,10 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-      # 임시: 검토 브랜치 배포용 (main 병합 후 제거 가능)
-      - claude/affectionate-hawking-8be6b6
+    branches: [main]
   workflow_dispatch:
 
 permissions:
