@@ -240,6 +240,17 @@ export function toggleMode() {
     }
 }
 
+// clipboard API 미지원 환경에서도 동작하도록 폴백 포함
+function copyInviteText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("초대 링크가 복사되었습니다.");
+        }).catch(() => alert("복사에 실패했습니다. 링크를 직접 공유해주세요.\n" + text));
+    } else {
+        alert("복사를 지원하지 않는 환경입니다. 링크를 직접 공유해주세요.\n" + text);
+    }
+}
+
 export function inviteUser() {
     const shareData = {
         text: '우리교회 일정 함께 만들어요\nhttps://csy870617.github.io/faiths/'
@@ -248,14 +259,10 @@ export function inviteUser() {
     if (navigator.share) {
         navigator.share(shareData).catch((err) => {
             if (err.name !== 'AbortError') {
-               navigator.clipboard.writeText(shareData.text).then(() => {
-                   alert("초대 링크가 복사되었습니다.");
-               });
+                copyInviteText(shareData.text);
             }
         });
     } else {
-        navigator.clipboard.writeText(shareData.text).then(() => {
-            alert("초대 링크가 복사되었습니다.");
-        });
+        copyInviteText(shareData.text);
     }
 }

@@ -33,10 +33,26 @@ function sanitizeColor(color) {
 
 function getEventsArray(dateKey) {
     const rawData = state.eventsCache[dateKey];
-    if (!rawData) return [];
-    if (rawData.startsWith('[')) return JSON.parse(rawData);
-    else if (rawData.startsWith('{')) return [JSON.parse(rawData)];
-    else return [{ id: generateUUID(), title: rawData, isAllDay: true, color: "#4285F4" }];
+    if (!rawData || typeof rawData !== 'string') return [];
+    try {
+        if (rawData.startsWith('[')) {
+            const parsed = JSON.parse(rawData);
+            return Array.isArray(parsed) ? parsed : [];
+        }
+        if (rawData.startsWith('{')) return [JSON.parse(rawData)];
+    } catch (e) {
+        console.error(`이벤트 데이터 파싱 실패 (${dateKey}):`, e);
+        return [];
+    }
+    // 레거시 평문 일정: id가 호출마다 바뀌면 수정/삭제/이동이 불가능하므로 날짜 기반 고정 id 사용
+    return [{
+        id: `legacy-${dateKey}`,
+        title: rawData,
+        isAllDay: true,
+        color: "#4285F4",
+        startDate: dateKey,
+        endDate: dateKey
+    }];
 }
 
 function closeAndReturnToCalendar() {
@@ -95,7 +111,8 @@ function setSelectsFromTimeString(prefix, timeStr) {
     if (!timeStr) timeStr = "09:00";
     
     let [h, m] = timeStr.split(':').map(Number);
-    
+    if (isNaN(h) || isNaN(m)) { h = 9; m = 0; }
+
     m = Math.floor(m / 10) * 10;
 
     let ampm = "AM";
@@ -116,6 +133,7 @@ function setSelectsFromTimeString(prefix, timeStr) {
 // ==========================================
 
 async function moveEvent(eventData, newStartDateStr) {
+    if (!state.isAdmin) { alert("일정을 이동할 권한이 없습니다."); return; }
     const oldStart = parseDateStr(eventData.startDate);
     const oldEnd = parseDateStr(eventData.endDate);
     const newStart = parseDateStr(newStartDateStr);
@@ -191,11 +209,18 @@ async function saveSchedule() {
     const colorVal = document.getElementById('selected-color').value;
     const descVal = document.getElementById('input-desc').value;
 
+    if (!state.isAdmin) { alert("일정을 저장할 권한이 없습니다."); return; }
     if (!titleVal) { alert("제목을 입력해주세요."); return; }
+    if (!startDateVal) { alert("시작일을 입력해주세요."); return; }
     if (!endDateVal) { alert("종료일을 입력해주세요."); return; }
 
     const startDateTime = new Date(`${startDateVal}T${startTimeVal}`);
     const endDateTime = new Date(`${endDateVal}T${endTimeVal}`);
+
+    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+        alert("날짜 형식이 올바르지 않습니다.");
+        return;
+    }
 
     if (endDateTime < startDateTime) {
         alert("종료 일시가 시작 일시보다 빠를 수 없습니다.");
@@ -263,6 +288,7 @@ async function saveSchedule() {
 }
 
 async function deleteSchedule() {
+    if (!state.isAdmin) { alert("일정을 삭제할 권한이 없습니다."); return; }
     if(!confirm("이 일정을 삭제하시겠습니까?")) return;
     if (!state.currentEditingId) return;
 
@@ -300,18 +326,23 @@ function enterService(docId, name, isManager) {
     document.getElementById('calendar-view').style.display = 'flex';
     document.getElementById('display-church-name').innerText = name;
     
-    onSnapshot(doc(db, "churches", docId), (docSnap) => {
+    // 재입장 시 이전 리스너가 남아 중복 렌더링되지 않도록 기존 구독 해제
+    if (state.unsubscribeSnapshot) state.unsubscribeSnapshot();
+    state.unsubscribeSnapshot = onSnapshot(doc(db, "churches", docId), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            state.eventsCache = data.events || {}; 
+            state.eventsCache = data.events || {};
             calculateYearlyData(state.currentYear, state);
             renderCalendar();
-            
+
             if (document.getElementById('list-modal').style.display === 'flex') {
                 const dateKey = document.getElementById('list-modal').getAttribute('data-key');
-                if (dateKey) openListModal(dateKey); 
+                if (dateKey) openListModal(dateKey);
             }
         }
+    }, (error) => {
+        console.error("실시간 동기화 오류:", error);
+        alert("일정 동기화 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.");
     });
 
     initGestures();
@@ -389,8 +420,12 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
             dayEl.classList.remove('drag-over');
             const json = e.dataTransfer.getData('text/plain');
             if (json) {
-                const data = JSON.parse(json);
-                moveEvent(data, dateKey);
+                try {
+                    const data = JSON.parse(json);
+                    if (data && data.id) moveEvent(data, dateKey);
+                } catch {
+                    // 외부에서 드래그된 일반 텍스트 등은 무시
+                }
             }
         };
     }
@@ -501,11 +536,18 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
                 };
                 eventBadge.ondragend = () => { eventBadge.classList.remove('dragging'); };
                 eventBadge.addEventListener('touchstart', (e) => {
-                    state.longPressTimer = setTimeout(() => { enterMoveMode(data); }, 600); 
+                    state.longPressTimer = setTimeout(() => { enterMoveMode(data); }, 600);
                 }, {passive: true});
-                eventBadge.addEventListener('touchend', () => {
-                    if (state.longPressTimer) clearTimeout(state.longPressTimer);
-                }, {passive: true});
+                const cancelLongPress = () => {
+                    if (state.longPressTimer) {
+                        clearTimeout(state.longPressTimer);
+                        state.longPressTimer = null;
+                    }
+                };
+                // 스크롤(터치 이동) 중에는 길게누름 이동 모드가 발동하지 않도록 취소
+                eventBadge.addEventListener('touchmove', cancelLongPress, {passive: true});
+                eventBadge.addEventListener('touchend', cancelLongPress, {passive: true});
+                eventBadge.addEventListener('touchcancel', cancelLongPress, {passive: true});
             }
 
             eventBadge.onclick = (e) => {
@@ -608,6 +650,7 @@ function closeListModal() {
 }
 
 window.openAddModalFromList = function() {
+    if (!state.isAdmin) { alert("일정을 추가할 권한이 없습니다. 비밀번호로 입장해주세요."); return; }
     const dateKey = document.getElementById('list-modal').getAttribute('data-key');
     if(!dateKey) return;
     const [y, m, d] = dateKey.split('-').map(Number);
@@ -753,9 +796,30 @@ async function shareMonth() {
 }
 
 function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("일정이 클립보드에 복사되었습니다.");
+        }).catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+// clipboard API 미지원(비보안 컨텍스트, 구형 브라우저) 환경 대비
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
         alert("일정이 클립보드에 복사되었습니다.");
-    }).catch(err => alert("복사 실패"));
+    } catch {
+        alert("복사에 실패했습니다.");
+    }
+    ta.remove();
 }
 
 function updateLiturgicalBadge(element) {
@@ -820,12 +884,15 @@ function exitMoveMode() {
 function initGestures() {
     const container = document.getElementById('calendar-grid');
     if(!container) return;
-    
+    // 재입장 시 리스너가 중복 등록되어 한 번에 여러 달이 넘어가는 것 방지
+    if (state.gesturesInitialized) return;
+    state.gesturesInitialized = true;
+
     container.addEventListener('wheel', (e) => {
-        if (state.isAnimating) return;
+        if (state.isAnimating || e.deltaY === 0) return;
         if (e.deltaY > 0) changeMonth(1); else changeMonth(-1);
         state.isAnimating = true; setTimeout(() => state.isAnimating = false, 500);
-    });
+    }, {passive: true});
 
     container.addEventListener('touchstart', (e) => { state.touchStartX = e.changedTouches[0].screenX; }, {passive:true});
     container.addEventListener('touchend', (e) => {
