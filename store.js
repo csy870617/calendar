@@ -15,5 +15,7 @@ export const state = {
     currentEditingId: null,
     longPressTimer: null,
     touchStartX: 0,
-    touchEndX: 0
+    touchEndX: 0,
+    unsubscribeSnapshot: null,
+    gesturesInitialized: false
 };
