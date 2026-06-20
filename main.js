@@ -37,9 +37,16 @@ function getEventsArray(dateKey) {
     try {
         if (rawData.startsWith('[')) {
             const parsed = JSON.parse(rawData);
-            return Array.isArray(parsed) ? parsed : [];
+            if (!Array.isArray(parsed)) return [];
+            // 배열 내 항목에 id가 없으면 날짜 기반 고정 id 부여(수정/삭제/이동 가능하도록)
+            return parsed.map((e, i) => (e && e.id) ? e : { ...e, id: `legacy-${dateKey}-${i}` });
         }
-        if (rawData.startsWith('{')) return [JSON.parse(rawData)];
+        if (rawData.startsWith('{')) {
+            const obj = JSON.parse(rawData);
+            // 단일 객체 레거시 일정에 id가 없으면 고정 id 부여
+            if (!obj.id) obj.id = `legacy-${dateKey}`;
+            return [obj];
+        }
     } catch (e) {
         console.error(`이벤트 데이터 파싱 실패 (${dateKey}):`, e);
         return [];
@@ -198,16 +205,16 @@ async function moveEvent(eventData, newStartDateStr) {
 }
 
 async function saveSchedule() {
-    const titleVal = document.getElementById('input-title').value;
+    const titleVal = document.getElementById('input-title').value.trim();
     const startDateVal = document.getElementById('start-date').value;
     const endDateVal = document.getElementById('end-date').value;
-    
+
     const startTimeVal = getTimeStringFromSelects('start');
     const endTimeVal = getTimeStringFromSelects('end');
-    
+
     const isAllDay = document.getElementById('all-day-check').checked;
     const colorVal = document.getElementById('selected-color').value;
-    const descVal = document.getElementById('input-desc').value;
+    const descVal = document.getElementById('input-desc').value.trim();
 
     if (!state.isAdmin) { alert("일정을 저장할 권한이 없습니다."); return; }
     if (!titleVal) { alert("제목을 입력해주세요."); return; }
@@ -752,12 +759,19 @@ async function shareMonth() {
     const events = state.eventsCache;
     const churchName = state.churchInfo.name || "우리교회";
     let monthEvents = [];
+    // 여러 날 일정이 날짜별로 중복 등장하므로 id 기준 한 번만 수록(해당 월 첫 등장일 기준)
+    const seenIds = new Set();
 
-    Object.keys(events).forEach(key => {
+    // 날짜순으로 처리해야 "첫 등장일"이 가장 빠른 날로 잡힘
+    Object.keys(events).sort().forEach(key => {
         const [y, m, d] = key.split('-').map(Number);
         if (y === state.currentYear && m === (state.currentMonth + 1)) {
             const dayEvents = getEventsArray(key);
             dayEvents.forEach(data => {
+                if (data.id) {
+                    if (seenIds.has(data.id)) return;
+                    seenIds.add(data.id);
+                }
                 monthEvents.push({
                     day: d,
                     title: data.title,
@@ -888,14 +902,20 @@ function initGestures() {
     if (state.gesturesInitialized) return;
     state.gesturesInitialized = true;
 
+    // 모달이 열려 있으면 달력 제스처(달 이동) 무시
+    const isModalOpen = () =>
+        document.getElementById('event-modal').style.display === 'flex' ||
+        document.getElementById('list-modal').style.display === 'flex';
+
     container.addEventListener('wheel', (e) => {
-        if (state.isAnimating || e.deltaY === 0) return;
+        if (isModalOpen() || state.isAnimating || e.deltaY === 0) return;
         if (e.deltaY > 0) changeMonth(1); else changeMonth(-1);
         state.isAnimating = true; setTimeout(() => state.isAnimating = false, 500);
     }, {passive: true});
 
     container.addEventListener('touchstart', (e) => { state.touchStartX = e.changedTouches[0].screenX; }, {passive:true});
     container.addEventListener('touchend', (e) => {
+        if (isModalOpen()) return;
         state.touchEndX = e.changedTouches[0].screenX;
         if (state.touchEndX < state.touchStartX - 50) changeMonth(1);
         if (state.touchEndX > state.touchStartX + 50) changeMonth(-1);
@@ -930,6 +950,8 @@ window.addEventListener('popstate', () => {
     const listModal = document.getElementById('list-modal');
     if (eventModal && eventModal.style.display === 'flex') {
         eventModal.style.display = 'none';
+        // 입력 모달이 닫히면 편집 상태도 초기화(다음 추가/수정 진입 시 잔류 방지)
+        state.currentEditingId = null;
         return;
     }
     if (listModal && listModal.style.display === 'flex') {
