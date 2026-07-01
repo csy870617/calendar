@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { doc, getDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, onSnapshot, runTransaction, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { state } from './store.js';
 import { generateUUID, calculateYearlyData } from './utils.js'; 
 import { handleAuthAction, handleGuestLogin, logout, checkAutoLogin, toggleMode, inviteUser } from './auth.js';
@@ -31,15 +31,28 @@ function sanitizeColor(color) {
     return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(color) ? color : '#4285F4';
 }
 
-function getEventsArray(dateKey) {
-    const rawData = state.eventsCache[dateKey];
+// 배열 위치가 아니라 내용 기반으로 고정 id를 만들어, 같은 날짜의 다른 항목이
+// 삭제/이동되어 배열 인덱스가 밀려도 이 항목의 id는 바뀌지 않도록 함
+function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash * 31 + str.charCodeAt(i)) | 0;
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function parseEventsArray(rawData, dateKey) {
     if (!rawData || typeof rawData !== 'string') return [];
     try {
         if (rawData.startsWith('[')) {
             const parsed = JSON.parse(rawData);
             if (!Array.isArray(parsed)) return [];
-            // 배열 내 항목에 id가 없으면 날짜 기반 고정 id 부여(수정/삭제/이동 가능하도록)
-            return parsed.map((e, i) => (e && e.id) ? e : { ...e, id: `legacy-${dateKey}-${i}` });
+            // 배열 내 항목에 id가 없으면 내용 기반 고정 id 부여(수정/삭제/이동 가능하도록)
+            return parsed.map((e) => {
+                if (e && e.id) return e;
+                const content = `${dateKey}|${e && e.title}|${e && e.startTime}|${e && e.endTime}|${e && e.desc}`;
+                return { ...e, id: `legacy-${hashString(content)}` };
+            });
         }
         if (rawData.startsWith('{')) {
             const obj = JSON.parse(rawData);
@@ -60,6 +73,15 @@ function getEventsArray(dateKey) {
         startDate: dateKey,
         endDate: dateKey
     }];
+}
+
+function getEventsArray(dateKey) {
+    return parseEventsArray(state.eventsCache[dateKey], dateKey);
+}
+
+// 트랜잭션에서 막 읽어온 최신 events 맵을 기준으로 파싱(로컬 캐시 지연 회피용)
+function getEventsArrayFromMap(eventsMap, dateKey) {
+    return parseEventsArray(eventsMap[dateKey], dateKey);
 }
 
 function closeAndReturnToCalendar() {
@@ -141,64 +163,67 @@ function setSelectsFromTimeString(prefix, timeStr) {
 
 async function moveEvent(eventData, newStartDateStr) {
     if (!state.isAdmin) { alert("일정을 이동할 권한이 없습니다."); return; }
+    const eventId = eventData.id;
+    if (!eventId) { alert("데이터 오류: ID가 없습니다."); return; }
+
     const oldStart = parseDateStr(eventData.startDate);
     const oldEnd = parseDateStr(eventData.endDate);
     const newStart = parseDateStr(newStartDateStr);
-    
+
     const diffTime = oldEnd - oldStart;
     const durationDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    
+
     const newEnd = new Date(newStart);
     newEnd.setDate(newEnd.getDate() + durationDays);
 
     const newStartStr = formatDateKey(newStart);
     const newEndStr = formatDateKey(newEnd);
-    const eventId = eventData.id;
 
-    if (!eventId) { alert("데이터 오류: ID가 없습니다."); return; }
-
-    let tempUpdates = {};
-
-    let tempDate = new Date(oldStart);
-    const tempEndObj = new Date(oldEnd);
-    
-    while(tempDate <= tempEndObj) {
-        const key = formatDateKey(tempDate);
-        let arr = getEventsArray(key);
-        const newArr = arr.filter(e => e.id !== eventId);
-        if (newArr.length === 0) tempUpdates[key] = "DELETE";
-        else tempUpdates[key] = JSON.stringify(newArr);
-        tempDate.setDate(tempDate.getDate() + 1);
-    }
-
-    eventData.startDate = newStartStr;
-    eventData.endDate = newEndStr;
-
-    let loopDate = new Date(newStart);
-    const finalEndObj = new Date(newEnd);
-    
-    while(loopDate <= finalEndObj) {
-        const key = formatDateKey(loopDate);
-        let currentArr = [];
-        if (tempUpdates[key] !== undefined) {
-            if (tempUpdates[key] === "DELETE") currentArr = [];
-            else currentArr = JSON.parse(tempUpdates[key]);
-        } else {
-            currentArr = getEventsArray(key);
-        }
-        currentArr.push(eventData);
-        tempUpdates[key] = JSON.stringify(currentArr);
-        loopDate.setDate(loopDate.getDate() + 1);
-    }
-
-    let finalUpdates = {};
-    for (const [key, val] of Object.entries(tempUpdates)) {
-        if (val === "DELETE") finalUpdates[`events.${key}`] = deleteField();
-        else finalUpdates[`events.${key}`] = val;
-    }
+    const churchRef = doc(db, "churches", state.churchInfo.id);
 
     try {
-        await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
+        // 서버 최신 데이터를 다시 읽어 그 위에서 계산 → 동시 편집으로 인한 데이터 유실 방지
+        await runTransaction(db, async (tx) => {
+            const snap = await tx.get(churchRef);
+            if (!snap.exists()) throw new Error("문서를 찾을 수 없습니다.");
+            const freshEvents = snap.data().events || {};
+
+            // 이동 대상 일정의 최신 내용을 서버 데이터에서 찾음(드래그 시작 시점 스냅샷이 아닌 최신본 사용)
+            let freshEventObj = null;
+            let searchDate = new Date(oldStart);
+            while (searchDate <= oldEnd && !freshEventObj) {
+                const key = formatDateKey(searchDate);
+                freshEventObj = getEventsArrayFromMap(freshEvents, key).find(e => e.id === eventId) || null;
+                searchDate.setDate(searchDate.getDate() + 1);
+            }
+            if (!freshEventObj) freshEventObj = eventData;
+
+            const updatedEvent = { ...freshEventObj, startDate: newStartStr, endDate: newEndStr };
+
+            let tempUpdates = {};
+
+            let tempDate = new Date(oldStart);
+            while (tempDate <= oldEnd) {
+                const key = formatDateKey(tempDate);
+                const arr = getEventsArrayFromMap(freshEvents, key);
+                tempUpdates[key] = arr.filter(e => e.id !== eventId);
+                tempDate.setDate(tempDate.getDate() + 1);
+            }
+
+            let loopDate = new Date(newStart);
+            while (loopDate <= newEnd) {
+                const key = formatDateKey(loopDate);
+                const currentArr = tempUpdates[key] !== undefined ? tempUpdates[key] : getEventsArrayFromMap(freshEvents, key);
+                tempUpdates[key] = [...currentArr, updatedEvent];
+                loopDate.setDate(loopDate.getDate() + 1);
+            }
+
+            const finalUpdates = {};
+            for (const [key, arr] of Object.entries(tempUpdates)) {
+                finalUpdates[`events.${key}`] = arr.length === 0 ? deleteField() : JSON.stringify(arr);
+            }
+            tx.update(churchRef, finalUpdates);
+        });
     } catch(e) {
         alert("이동 실패: " + e.message);
     }
@@ -247,47 +272,43 @@ async function saveSchedule() {
         desc: descVal
     };
 
-    let tempUpdates = {};
-
-    if (state.currentEditingId) {
-        Object.keys(state.eventsCache).forEach(key => {
-            let arr = getEventsArray(key);
-            const exists = arr.find(e => e.id === state.currentEditingId);
-            if (exists) {
-                const newArr = arr.filter(e => e.id !== state.currentEditingId);
-                if (newArr.length === 0) tempUpdates[key] = "DELETE";
-                else tempUpdates[key] = JSON.stringify(newArr);
-            }
-        });
-    }
-
-    let loopDate = parseDateStr(startDateVal);
-    const finalEndObj = parseDateStr(endDateVal);
-    
-    while(loopDate <= finalEndObj) {
-        const key = formatDateKey(loopDate);
-        let currentArr = [];
-
-        if (tempUpdates[key] !== undefined) {
-            if (tempUpdates[key] === "DELETE") currentArr = [];
-            else currentArr = JSON.parse(tempUpdates[key]);
-        } else {
-            currentArr = getEventsArray(key);
-        }
-
-        currentArr.push(eventObj);
-        tempUpdates[key] = JSON.stringify(currentArr);
-        loopDate.setDate(loopDate.getDate() + 1);
-    }
-
-    let finalUpdates = {};
-    for (const [key, val] of Object.entries(tempUpdates)) {
-        if (val === "DELETE") finalUpdates[`events.${key}`] = deleteField();
-        else finalUpdates[`events.${key}`] = val;
-    }
+    const editingId = state.currentEditingId;
+    const churchRef = doc(db, "churches", state.churchInfo.id);
 
     try {
-        await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
+        // 서버 최신 데이터를 다시 읽어 그 위에서 계산 → 동시 편집으로 인한 데이터 유실 방지
+        await runTransaction(db, async (tx) => {
+            const snap = await tx.get(churchRef);
+            if (!snap.exists()) throw new Error("문서를 찾을 수 없습니다.");
+            const freshEvents = snap.data().events || {};
+
+            let tempUpdates = {};
+
+            if (editingId) {
+                Object.keys(freshEvents).forEach(key => {
+                    const arr = getEventsArrayFromMap(freshEvents, key);
+                    if (arr.find(e => e.id === editingId)) {
+                        tempUpdates[key] = arr.filter(e => e.id !== editingId);
+                    }
+                });
+            }
+
+            let loopDate = parseDateStr(startDateVal);
+            const finalEndObj = parseDateStr(endDateVal);
+
+            while (loopDate <= finalEndObj) {
+                const key = formatDateKey(loopDate);
+                const currentArr = tempUpdates[key] !== undefined ? tempUpdates[key] : getEventsArrayFromMap(freshEvents, key);
+                tempUpdates[key] = [...currentArr, eventObj];
+                loopDate.setDate(loopDate.getDate() + 1);
+            }
+
+            const finalUpdates = {};
+            for (const [key, arr] of Object.entries(tempUpdates)) {
+                finalUpdates[`events.${key}`] = arr.length === 0 ? deleteField() : JSON.stringify(arr);
+            }
+            tx.update(churchRef, finalUpdates);
+        });
         closeAndReturnToCalendar();
     } catch(e) {
         alert("저장 실패: " + e.message);
@@ -299,25 +320,32 @@ async function deleteSchedule() {
     if(!confirm("이 일정을 삭제하시겠습니까?")) return;
     if (!state.currentEditingId) return;
 
-    let finalUpdates = {};
-    Object.keys(state.eventsCache).forEach(key => {
-        let arr = getEventsArray(key);
-        if (arr.find(e => e.id === state.currentEditingId)) {
-            const newArr = arr.filter(e => e.id !== state.currentEditingId);
-            if (newArr.length === 0) finalUpdates[`events.${key}`] = deleteField();
-            else finalUpdates[`events.${key}`] = JSON.stringify(newArr);
-        }
-    });
+    const editingId = state.currentEditingId;
+    const churchRef = doc(db, "churches", state.churchInfo.id);
 
-    if(Object.keys(finalUpdates).length > 0) {
-        try {
-            await updateDoc(doc(db, "churches", state.churchInfo.id), finalUpdates);
-            closeAndReturnToCalendar();
-        } catch(e) {
-            alert("삭제 실패: " + e.message);
-        }
-    } else {
+    try {
+        // 서버 최신 데이터를 다시 읽어 그 위에서 계산 → 동시 편집으로 인한 데이터 유실 방지
+        await runTransaction(db, async (tx) => {
+            const snap = await tx.get(churchRef);
+            if (!snap.exists()) throw new Error("문서를 찾을 수 없습니다.");
+            const freshEvents = snap.data().events || {};
+
+            const finalUpdates = {};
+            Object.keys(freshEvents).forEach(key => {
+                const arr = getEventsArrayFromMap(freshEvents, key);
+                if (arr.find(e => e.id === editingId)) {
+                    const newArr = arr.filter(e => e.id !== editingId);
+                    finalUpdates[`events.${key}`] = newArr.length === 0 ? deleteField() : JSON.stringify(newArr);
+                }
+            });
+
+            if (Object.keys(finalUpdates).length > 0) {
+                tx.update(churchRef, finalUpdates);
+            }
+        });
         closeAndReturnToCalendar();
+    } catch(e) {
+        alert("삭제 실패: " + e.message);
     }
 }
 
@@ -356,8 +384,7 @@ function enterService(docId, name, isManager) {
 }
 
 function renderCalendar() {
-    const existingOverlay = document.querySelector('.expanded-badge-card');
-    if (existingOverlay) existingOverlay.remove();
+    removeExpandedBadge();
 
     calculateYearlyData(state.currentYear, state);
     const grid = document.getElementById('calendar-grid');
@@ -438,8 +465,7 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
     }
 
     dayEl.onclick = (e) => {
-        const existingOverlay = document.querySelector('.expanded-badge-card');
-        if (existingOverlay) existingOverlay.remove();
+        removeExpandedBadge();
 
         if (state.isMovingMode && state.movingEventData) {
             moveEvent(state.movingEventData, dateKey);
@@ -853,31 +879,41 @@ function updateLiturgicalBadge(element) {
     element.style.color = text;
 }
 
-function showExpandedBadge(element, text, bgColor, textColor) {
+// showExpandedBadge가 등록한 임시 document 클릭 리스너(카드 바깥 클릭 시 닫기용) 참조.
+// 카드가 사용자 클릭이 아닌 다른 경로(달력 재렌더링 등)로 제거될 때도 함께 정리하기 위함
+let expandedBadgeCloseHandler = null;
+
+function removeExpandedBadge() {
     const existing = document.querySelector('.expanded-badge-card');
     if (existing) existing.remove();
+    if (expandedBadgeCloseHandler) {
+        document.removeEventListener('click', expandedBadgeCloseHandler);
+        expandedBadgeCloseHandler = null;
+    }
+}
+
+function showExpandedBadge(element, text, bgColor, textColor) {
+    removeExpandedBadge();
 
     const rect = element.getBoundingClientRect();
     const card = document.createElement('div');
     card.className = 'expanded-badge-card';
     card.innerText = text;
-    
+
     if(bgColor) card.style.backgroundColor = bgColor;
     if(textColor) card.style.color = textColor;
-    
+
     card.style.top = `${rect.top}px`;
     card.style.left = `${rect.left}px`;
-    
-    card.onclick = (e) => { e.stopPropagation(); card.remove(); };
+
+    card.onclick = (e) => { e.stopPropagation(); removeExpandedBadge(); };
     document.body.appendChild(card);
 
     setTimeout(() => {
-        document.addEventListener('click', function close(e) {
-            if(e.target !== card) {
-                card.remove();
-                document.removeEventListener('click', close);
-            }
-        });
+        expandedBadgeCloseHandler = (e) => {
+            if (e.target !== card) removeExpandedBadge();
+        };
+        document.addEventListener('click', expandedBadgeCloseHandler);
     }, 0);
 }
 
