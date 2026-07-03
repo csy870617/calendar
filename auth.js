@@ -146,7 +146,6 @@ export async function handleAuthAction() {
 
         const rememberCheck = document.getElementById('remember-check');
         const autoLoginCheck = document.getElementById('auto-login-check');
-        clearGuestChoices();
 
         if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
 
@@ -167,74 +166,10 @@ export async function handleAuthAction() {
     }
 }
 
-// 이름이 겹치는 그룹이 여러 개일 때, 임의로 하나를 골라 보여주면 다른 그룹의
-// 비공개 일정이 노출될 수 있으므로 목록을 보여주고 사용자가 직접 선택하게 함
-function clearGuestChoices() {
-    const list = document.getElementById('guest-select-list');
-    if (list) list.innerHTML = "";
-}
-
-function renderGuestChoices(docs, name) {
-    const list = document.getElementById('guest-select-list');
-    if (!list) return;
-    list.innerHTML = "";
-
-    docs.forEach((docSnap, i) => {
-        const eventCount = Object.keys(docSnap.data().events || {}).length;
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'guest-select-item';
-
-        const label = document.createElement('span');
-        label.textContent = `${name} #${i + 1}`;
-        const meta = document.createElement('span');
-        meta.className = 'guest-select-meta';
-        meta.textContent = `일정 ${eventCount}개`;
-        item.appendChild(label);
-        item.appendChild(meta);
-
-        item.onclick = () => {
-            clearGuestChoices();
-            window.enterService(docSnap.id, name, false);
-        };
-        list.appendChild(item);
-    });
-}
-
-export async function handleGuestLogin() {
-    if (isAuthSubmitting) return;
-    isAuthSubmitting = true;
-    setAuthBusy(true);
-    try {
-        const name = document.getElementById('church-name').value.trim();
-        const errorMsg = document.getElementById('error-msg');
-        clearGuestChoices();
-
-        if (!name) { errorMsg.innerText = "교회 이름을 입력해주세요."; return; }
-
-        await authenticateAndQuery(async () => {
-            const churchesRef = collection(db, "churches");
-            const q = query(churchesRef, where("name", "==", name));
-
-            try {
-                const querySnapshot = await getDocs(q);
-                if (querySnapshot.size === 1) {
-                    const docSnap = querySnapshot.docs[0];
-                    window.enterService(docSnap.id, name, false);
-                } else if (querySnapshot.size > 1) {
-                    errorMsg.innerText = "동일한 이름의 그룹이 여러 개 있습니다. 아래에서 선택해주세요.";
-                    renderGuestChoices(querySnapshot.docs, name);
-                } else {
-                    errorMsg.innerText = "존재하지 않는 교회입니다.";
-                }
-            } catch (e) {
-                alert("오류 발생: " + e.message);
-            }
-        });
-    } finally {
-        isAuthSubmitting = false;
-        setAuthBusy(false);
-    }
+// '로그인 없이 보기'는 특정 그룹을 조회하는 게 아니라, 그룹 데이터 없이
+// 교회력(절기/공휴일)만 보여주는 미리보기 모드이므로 Firestore 조회가 필요 없음
+export function handleGuestLogin() {
+    window.enterGuestView();
 }
 
 export function logout() {
@@ -289,7 +224,6 @@ export function toggleMode() {
     if(inviteBtn) inviteBtn.style.display = state.isRegisterMode ? 'none' : 'block';
 
     errorMsg.innerText = "";
-    clearGuestChoices();
 
     if (state.isRegisterMode) {
         title.innerText = "새 그룹 만들기";

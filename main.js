@@ -383,6 +383,24 @@ function enterService(docId, name, isManager) {
     initGestures();
 }
 
+// '로그인 없이 보기': 특정 그룹 데이터 없이 교회력(절기/공휴일)만 보여주는 미리보기.
+// Firestore 조회/구독이 필요 없으므로 실시간 리스너를 걸지 않음
+function enterGuestView() {
+    if (state.unsubscribeSnapshot) { state.unsubscribeSnapshot(); state.unsubscribeSnapshot = null; }
+
+    state.churchInfo = { id: null, name: "" };
+    state.isAdmin = false;
+    state.eventsCache = {};
+
+    document.getElementById('auth-view').style.display = 'none';
+    document.getElementById('calendar-view').style.display = 'flex';
+    document.getElementById('display-church-name').innerText = "게스트 보기";
+
+    calculateYearlyData(state.currentYear, state);
+    renderCalendar();
+    initGestures();
+}
+
 function renderCalendar() {
     removeExpandedBadge();
 
@@ -997,6 +1015,7 @@ window.addEventListener('popstate', () => {
 
 // [Global Link]
 window.enterService = enterService;
+window.enterGuestView = enterGuestView;
 window.handleAuthAction = handleAuthAction;
 window.handleGuestLogin = handleGuestLogin;
 window.inviteUser = inviteUser;
