@@ -125,53 +125,79 @@ async function performRegister(name, hashedPw) {
     });
 }
 
+// 버튼 연타/중복 클릭으로 동일 요청(특히 그룹 등록)이 겹쳐 들어가는 것을 방지
+let isAuthSubmitting = false;
+
+function setAuthBusy(busy) {
+    const actionBtn = document.getElementById('action-btn');
+    const guestBtn = document.querySelector('.btn-text');
+    if (actionBtn) actionBtn.disabled = busy;
+    if (guestBtn) guestBtn.disabled = busy;
+}
+
 export async function handleAuthAction() {
-    const name = document.getElementById('church-name').value.trim();
-    const pw = document.getElementById('church-pw').value.trim();
-    const errorMsg = document.getElementById('error-msg');
+    if (isAuthSubmitting) return;
+    isAuthSubmitting = true;
+    setAuthBusy(true);
+    try {
+        const name = document.getElementById('church-name').value.trim();
+        const pw = document.getElementById('church-pw').value.trim();
+        const errorMsg = document.getElementById('error-msg');
 
-    const rememberCheck = document.getElementById('remember-check');
-    const autoLoginCheck = document.getElementById('auto-login-check');
+        const rememberCheck = document.getElementById('remember-check');
+        const autoLoginCheck = document.getElementById('auto-login-check');
 
-    if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
+        if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
 
-    const hashedPw = await hashPassword(pw);
+        const hashedPw = await hashPassword(pw);
 
-    if (state.isRegisterMode) {
-        await performRegister(name, hashedPw);
-    } else {
-        const saveOptions = (rememberCheck.checked || autoLoginCheck.checked)
-            ? { autoLogin: autoLoginCheck.checked, remember: rememberCheck.checked }
-            : null;
-        // 사용자 원문 입력을 같이 넘겨 레거시(평문 저장) 그룹도 로그인 후 자동 해시 업그레이드
-        await performLogin(name, hashedPw, saveOptions, pw);
+        if (state.isRegisterMode) {
+            await performRegister(name, hashedPw);
+        } else {
+            const saveOptions = (rememberCheck.checked || autoLoginCheck.checked)
+                ? { autoLogin: autoLoginCheck.checked, remember: rememberCheck.checked }
+                : null;
+            // 사용자 원문 입력을 같이 넘겨 레거시(평문 저장) 그룹도 로그인 후 자동 해시 업그레이드
+            await performLogin(name, hashedPw, saveOptions, pw);
+        }
+    } finally {
+        isAuthSubmitting = false;
+        setAuthBusy(false);
     }
 }
 
 export async function handleGuestLogin() {
-    const name = document.getElementById('church-name').value.trim();
-    const errorMsg = document.getElementById('error-msg');
+    if (isAuthSubmitting) return;
+    isAuthSubmitting = true;
+    setAuthBusy(true);
+    try {
+        const name = document.getElementById('church-name').value.trim();
+        const errorMsg = document.getElementById('error-msg');
 
-    if (!name) { errorMsg.innerText = "교회 이름을 입력해주세요."; return; }
+        if (!name) { errorMsg.innerText = "교회 이름을 입력해주세요."; return; }
 
-    await authenticateAndQuery(async () => {
-        const churchesRef = collection(db, "churches");
-        const q = query(churchesRef, where("name", "==", name));
+        await authenticateAndQuery(async () => {
+            const churchesRef = collection(db, "churches");
+            const q = query(churchesRef, where("name", "==", name));
 
-        try {
-            const querySnapshot = await getDocs(q);
-            if (querySnapshot.size === 1) {
-                const docSnap = querySnapshot.docs[0];
-                window.enterService(docSnap.id, name, false);
-            } else if (querySnapshot.size > 1) {
-                errorMsg.innerText = "동일한 이름의 그룹이 여러 개 있습니다. 비밀번호로 로그인해주세요.";
-            } else {
-                errorMsg.innerText = "존재하지 않는 교회입니다.";
+            try {
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.size === 1) {
+                    const docSnap = querySnapshot.docs[0];
+                    window.enterService(docSnap.id, name, false);
+                } else if (querySnapshot.size > 1) {
+                    errorMsg.innerText = "동일한 이름의 그룹이 여러 개 있습니다. 비밀번호로 로그인해주세요.";
+                } else {
+                    errorMsg.innerText = "존재하지 않는 교회입니다.";
+                }
+            } catch (e) {
+                alert("오류 발생: " + e.message);
             }
-        } catch (e) {
-            alert("오류 발생: " + e.message);
-        }
-    });
+        });
+    } finally {
+        isAuthSubmitting = false;
+        setAuthBusy(false);
+    }
 }
 
 export function logout() {
