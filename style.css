@@ -114,23 +114,6 @@ button:hover { background-color: #3367d6; }
     min-height: 20px; text-align: center; line-height: 1.4;
 }
 
-/* 동일한 이름의 그룹이 여러 개일 때 게스트 로그인용 선택 목록 */
-.guest-select-list {
-    display: flex; flex-direction: column; gap: 6px;
-    margin-bottom: 10px;
-}
-.guest-select-item {
-    display: flex; justify-content: space-between; align-items: center;
-    width: 100%; padding: 10px 12px;
-    border: 1px solid var(--border); border-radius: 8px;
-    background: #f8f9fa; color: var(--text-main);
-    font-size: 0.85rem; font-weight: 500; cursor: pointer;
-    text-align: left; transition: background 0.2s;
-}
-.guest-select-item:hover { background: #f1f3f4; }
-.guest-select-item:active { transform: scale(0.98); }
-.guest-select-item .guest-select-meta { color: var(--text-sub); font-weight: 400; font-size: 0.8rem; }
-
 
 /* =========================================
    2. 캘린더 화면
