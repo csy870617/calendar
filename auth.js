@@ -229,9 +229,6 @@ export async function checkAutoLogin() {
             pw: savedAuth.pw,
             isHashed: isHashedPassword(savedAuth.pw)
         };
-        // 비밀번호 칸이 비어 보여도 저장된 로그인이 있음을 안내(그대로 입장 가능)
-        const pwInput = document.getElementById('church-pw');
-        if (pwInput) pwInput.placeholder = "비밀번호 저장됨 · 그대로 입장하기";
     }
 
     if (savedAuth.remember) {
