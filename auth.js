@@ -135,6 +135,10 @@ function setAuthBusy(busy) {
     if (guestBtn) guestBtn.disabled = busy;
 }
 
+// '저장'으로 기억해 둔 자격(해시). 재방문 시 비밀번호 재입력 없이 로그인하기 위한 것.
+// 평문은 저장하지 않으므로(보안) 저장된 해시로만 로그인함.
+let savedCredential = null;
+
 export async function handleAuthAction() {
     if (isAuthSubmitting) return;
     isAuthSubmitting = true;
@@ -147,18 +151,34 @@ export async function handleAuthAction() {
         const rememberCheck = document.getElementById('remember-check');
         const autoLoginCheck = document.getElementById('auto-login-check');
 
-        if (!name || !pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
-
-        const hashedPw = await hashPassword(pw);
+        if (!name) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
 
         if (state.isRegisterMode) {
+            if (!pw) { errorMsg.innerText = "필수 정보를 입력해주세요."; return; }
+            const hashedPw = await hashPassword(pw);
             await performRegister(name, hashedPw);
         } else {
+            // 비밀번호를 입력했으면 그 값으로, 비어 있으면 '저장'된 자격(해시)으로 로그인
+            let hashedPw, rawPw;
+            if (pw) {
+                hashedPw = await hashPassword(pw);
+                rawPw = pw; // 레거시(평문 저장) 그룹 폴백/해시 업그레이드용
+            } else if (savedCredential && savedCredential.name === name && savedCredential.pw) {
+                if (savedCredential.isHashed) {
+                    hashedPw = savedCredential.pw;
+                } else {
+                    hashedPw = await hashPassword(savedCredential.pw);
+                    rawPw = savedCredential.pw;
+                }
+            } else {
+                errorMsg.innerText = "필수 정보를 입력해주세요.";
+                return;
+            }
+
             const saveOptions = (rememberCheck.checked || autoLoginCheck.checked)
                 ? { autoLogin: autoLoginCheck.checked, remember: rememberCheck.checked }
                 : null;
-            // 사용자 원문 입력을 같이 넘겨 레거시(평문 저장) 그룹도 로그인 후 자동 해시 업그레이드
-            await performLogin(name, hashedPw, saveOptions, pw);
+            await performLogin(name, hashedPw, saveOptions, rawPw);
         }
     } finally {
         isAuthSubmitting = false;
@@ -187,6 +207,18 @@ export async function checkAutoLogin() {
     if (!savedAuth) return;
 
     document.getElementById('church-name').value = savedAuth.name || "";
+
+    // '저장'된 자격(해시)을 기억해두면, 재방문 시 비밀번호 재입력 없이 '입장하기'로 로그인 가능
+    if (savedAuth.pw) {
+        savedCredential = {
+            name: savedAuth.name,
+            pw: savedAuth.pw,
+            isHashed: isHashedPassword(savedAuth.pw)
+        };
+        // 비밀번호 칸이 비어 보여도 저장된 로그인이 있음을 안내(그대로 입장 가능)
+        const pwInput = document.getElementById('church-pw');
+        if (pwInput) pwInput.placeholder = "비밀번호 저장됨 · 그대로 입장하기";
+    }
 
     if (savedAuth.remember) {
         document.getElementById('remember-check').checked = true;
