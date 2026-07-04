@@ -39,7 +39,9 @@ async function authenticateAndQuery(callback) {
     }
 }
 
-// 로그인 수행 (해시된 비밀번호 우선, 실패 시 원문으로 레거시 매칭 후 해시로 자동 업그레이드)
+// 로그인 수행: 이름으로 후보 그룹을 조회한 뒤 비밀번호는 클라이언트에서 대조.
+// DB에 비밀번호가 해시로 저장됐든 평문(레거시)으로 저장됐든, 그리고 원문(rawPw)이
+// 있든 없든(자동 로그인) 일관되게 매칭됨. 평문 저장은 로그인 후 해시로 업그레이드.
 async function performLogin(name, hashedPw, saveOptions, rawPw) {
     const errorMsg = document.getElementById('error-msg');
 
@@ -47,19 +49,31 @@ async function performLogin(name, hashedPw, saveOptions, rawPw) {
         const churchesRef = collection(db, "churches");
 
         try {
-            // 1차: 해시된 비밀번호로 조회
-            let q = query(churchesRef, where("name", "==", name), where("password", "==", hashedPw));
-            let snapshot = await getDocs(q);
-            let matchedDoc = snapshot.empty ? null : snapshot.docs[0];
+            // 이름으로만 조회(비밀번호 형식에 의존하지 않음). 동명 그룹이 여러 개여도 순회하며 대조
+            const snapshot = await getDocs(query(churchesRef, where("name", "==", name)));
+
+            let matchedDoc = null;
             let needsMigration = false;
 
-            // 2차: 레거시 평문 비밀번호 폴백 (rawPw 제공 시)
-            if (!matchedDoc && rawPw) {
-                q = query(churchesRef, where("name", "==", name), where("password", "==", rawPw));
-                snapshot = await getDocs(q);
-                if (!snapshot.empty) {
-                    matchedDoc = snapshot.docs[0];
+            for (const d of snapshot.docs) {
+                const stored = d.data().password;
+                if (stored === hashedPw) {
+                    // 이미 해시로 저장된 정상 케이스
+                    matchedDoc = d;
+                    needsMigration = false;
+                    break;
+                }
+                if (rawPw && stored === rawPw) {
+                    // 평문 저장 + 사용자가 입력한 원문 일치(수동 로그인)
+                    matchedDoc = d;
                     needsMigration = true;
+                    break;
+                }
+                // 원문이 없어도(자동 로그인) 저장값이 평문이면 해시해서 대조
+                if (stored && (await hashPassword(stored)) === hashedPw) {
+                    matchedDoc = d;
+                    needsMigration = true;
+                    break;
                 }
             }
 
