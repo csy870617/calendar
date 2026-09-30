@@ -209,9 +209,14 @@ export function handleGuestLogin() {
 export function logout() {
     const savedAuth = getSavedAuth();
     if (savedAuth) {
-        // 로그아웃 시 자동 로그인만 해제 (저장은 유지될 수 있음)
-        savedAuth.autoLogin = false;
-        localStorage.setItem('churchAuthData', JSON.stringify(savedAuth));
+        if (savedAuth.remember) {
+            // '저장'을 켠 경우: 자동 로그인만 해제하고 저장 정보는 유지
+            savedAuth.autoLogin = false;
+            localStorage.setItem('churchAuthData', JSON.stringify(savedAuth));
+        } else {
+            // '저장'을 켜지 않았으면 로그아웃 후 비밀번호 없이 다시 들어올 수 없도록 모두 삭제
+            localStorage.removeItem('churchAuthData');
+        }
     }
     location.reload();
 }

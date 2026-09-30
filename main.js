@@ -254,7 +254,8 @@ async function saveSchedule() {
         return;
     }
 
-    if (endDateTime < startDateTime) {
+    // 하루 종일 일정은 (숨겨진) 시간 값과 무관하게 날짜만 비교
+    if (isAllDay ? endDateVal < startDateVal : endDateTime < startDateTime) {
         alert("종료 일시가 시작 일시보다 빠를 수 없습니다.");
         return;
     }
@@ -536,6 +537,8 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
                 if(txt) badge.style.color = txt;
 
                 badge.onclick = (e) => {
+                    // 이동 모드에서는 배지를 눌러도 날짜 칸 클릭(이동)으로 처리되도록 전파 허용
+                    if (state.isMovingMode) return;
                     e.stopPropagation();
                     const computedStyle = getComputedStyle(badge);
                     showExpandedBadge(badge, info.name, computedStyle.backgroundColor, computedStyle.color);
@@ -602,8 +605,9 @@ function createDayCell(grid, year, month, day, isOtherMonth) {
             }
 
             eventBadge.onclick = (e) => {
+                // 이동 모드에서는 날짜 칸 클릭(이동)으로 처리되도록 전파 허용
+                if (state.isMovingMode) return;
                 e.stopPropagation();
-                if(state.isMovingMode) return;
                 openListModal(dateKey);
             };
 
@@ -628,7 +632,8 @@ function openListModal(dateKey) {
     const container = document.getElementById('event-list-container');
     const title = document.getElementById('list-date-title');
     
-    if (history.state?.modal !== 'list') {
+    // 이미 열려 있는 목록을 갱신(실시간 동기화)할 때는 히스토리를 쌓지 않음
+    if (modal.style.display !== 'flex') {
         history.pushState({ modal: 'list' }, null, '');
     }
 
@@ -705,18 +710,18 @@ window.openAddModalFromList = function() {
     const dateKey = document.getElementById('list-modal').getAttribute('data-key');
     if(!dateKey) return;
     const [y, m, d] = dateKey.split('-').map(Number);
-    history.pushState({ modal: 'add' }, null, '');
     openModal(y, m, d);
 }
 
 function openModal(year, month, day) {
     if(state.isMovingMode) return;
 
-    if (!history.state || history.state.modal !== 'add') {
-         history.pushState({ modal: 'add' }, null, '');
+    const modal = document.getElementById('event-modal');
+    // 모달이 실제로 닫혀 있을 때만 히스토리 추가(새로고침 후 남은 history.state에 영향받지 않도록)
+    if (modal.style.display !== 'flex') {
+        history.pushState({ modal: 'add' }, null, '');
     }
 
-    const modal = document.getElementById('event-modal');
     modal.style.display = 'flex';
     document.getElementById('modal-title').innerText = "일정 추가";
     document.getElementById('btn-delete').style.display = 'none'; 
@@ -887,10 +892,11 @@ function updateLiturgicalBadge(element) {
     let text = "#137333";
 
     if (m === 12) { name = "대림절"; color = "#f3e8fd"; text = "#9333ea"; }
-    else if (m === 1) { name = "주현절"; color = "#f1f3f4"; text = "#3c4043"; }
+    else if (m === 1 || m === 2) { name = "주현절"; color = "#f1f3f4"; text = "#3c4043"; }
     else if (m === 3) { name = "사순절"; color = "#f3e8fd"; text = "#9333ea"; }
     else if (m === 4) { name = "부활절기"; color = "#fef7e0"; text = "#b06000"; }
-    else if (m === 5) { name = "성령강림절기"; color = "#fce8e6"; text = "#c5221f"; }
+    // 창조절은 9월 첫 주일부터 시작(utils.js의 '창조절 시작'과 일치)하므로 6~8월은 성령강림절기
+    else if (m >= 5 && m <= 8) { name = "성령강림절기"; color = "#fce8e6"; text = "#c5221f"; }
     
     element.innerText = name;
     element.style.backgroundColor = color;
